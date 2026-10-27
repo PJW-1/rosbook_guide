@@ -33,14 +33,61 @@ Quigley, Gerkey, Smart의 *Programming Robots with ROS* (O'Reilly, 2015)는 ROS 
 | 워크스페이스 | `~/rosbook_ws` (패키지는 `~/rosbook_ws/src/`) |
 | 시뮬레이터 | Gazebo Harmonic (gz-sim 8) + `ros_gz_bridge` |
 | 로봇 | TurtleBot3 waffle_pi 시뮬레이션 (LiDAR와 카메라 탑재). 실물 로봇은 쓰지 않습니다. |
+| 통신 미들웨어 (RMW) | Cyclone DDS (`rmw_cyclonedds_cpp`). Jazzy의 기본값인 Fast DDS를 쓰지 않는 이유는 아래에 적었습니다. |
+| 그래픽 | WSLg + `GALLIUM_DRIVER=d3d12` (Mesa가 D3D12를 거쳐 GPU로 렌더링) |
 
-`~/.bashrc`가 새 터미널을 열 때마다 ROS 2와 워크스페이스 환경을 불러오므로, 터미널을 새로 열면 바로 `ros2` 명령을 쓸 수 있습니다.
+`~/.bashrc`는 새 터미널을 열 때마다 다음 설정을 불러옵니다. 그래서 터미널을 새로 열면 바로 `ros2` 명령을 쓸 수 있습니다.
+
+- `/opt/ros/jazzy/setup.bash`와 `~/rosbook_ws/install/setup.bash`를 source 합니다.
+- `TURTLEBOT3_MODEL=waffle_pi`
+- `GALLIUM_DRIVER=d3d12`
+- `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`
 
 TurtleBot3 시뮬레이션은 다음 명령으로 띄웁니다.
 
 ```bash
 ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
 ```
+
+### 왜 Fast DDS 대신 Cyclone DDS를 쓰나요
+
+ROS 2 노드는 메시지를 직접 주고받지 않고, RMW라는 계층 아래에 있는 DDS 구현에 전달을 맡깁니다. Jazzy는 기본으로 Fast DDS를 쓰고, 환경 변수 `RMW_IMPLEMENTATION`을 바꾸면 다른 DDS 구현으로 교체할 수 있습니다.
+
+```
+노드 코드 (rclpy, rclcpp)
+   ↓
+rcl (공통 C 라이브러리)
+   ↓
+rmw (미들웨어 인터페이스)
+   ↓
+DDS 구현: Fast DDS 또는 Cyclone DDS   ← RMW_IMPLEMENTATION이 고르는 부분
+```
+
+이 PC의 WSL은 `networkingMode=mirrored`로 설정되어 있습니다. 이 환경에서 Fast DDS로 `demo_nodes_cpp`의 talker와 listener를 띄웠더니, `ros2 topic list`에는 토픽이 보였지만 listener는 10초 동안 메시지를 한 건도 받지 못했습니다. 탐색 범위를 `LOCALHOST`나 `SUBNET`으로 바꿔도, UDP만 쓰도록 해도 결과가 같았습니다. 같은 시험을 Cyclone DDS로 하면 메시지가 정상적으로 도착했습니다. mirrored 네트워크 모드가 원인으로 보이지만, NAT 모드로 되돌려서 확인하지는 않았습니다.
+
+RMW를 바꿔도 노드 코드, 토픽과 서비스 이름, QoS, launch 파일, `ros2` 명령은 모두 그대로입니다. 원서의 실습 내용도 영향을 받지 않습니다. 다만 다음 세 가지는 알아 두어야 합니다.
+
+- 서로 통신하는 터미널은 모두 같은 RMW를 써야 합니다. `.bashrc`를 고치기 전에 열어 둔 터미널은 닫고 새로 엽니다.
+- RMW를 바꾼 뒤에는 `ros2 daemon stop`을 한 번 실행합니다. 백그라운드에 떠 있던 daemon은 예전 RMW로 동작하고 있기 때문입니다.
+- 인터넷 자료에 나오는 Fast DDS 전용 설정(XML 프로파일, Discovery Server, `FASTDDS_` 로 시작하는 환경 변수)은 이 환경에 적용되지 않습니다.
+
+현재 쓰고 있는 RMW는 다음 명령으로 확인합니다. 2장에서 두 RMW를 직접 바꿔 가며 비교해 봅니다.
+
+```bash
+ros2 doctor --report | grep -i middleware
+```
+
+### 그래픽과 시뮬레이션 문제 해결
+
+- `GALLIUM_DRIVER=d3d12`를 설정하면 Gazebo가 GPU로 렌더링합니다. 이 설정이 없으면 CPU로 렌더링하는 llvmpipe가 쓰이고, 시뮬레이션이 실제 시간보다 몇 배에서 수십 배 느리게 흘러갑니다. 지금 쓰는 렌더러는 `glxinfo -B | grep -i "renderer string"`으로 확인합니다.
+- Gazebo 창이 뜨지 않거나 GUI가 비정상적으로 종료되면, 그 터미널에서만 CPU 렌더링으로 바꿔서 실행해 봅니다. 느리지만 안정적입니다.
+
+  ```bash
+  GALLIUM_DRIVER=llvmpipe ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
+  ```
+- `QT_QPA_PLATFORM=wayland`는 설정하지 않습니다. d3d12와 함께 쓰면 Gazebo GUI가 렌더링 창을 만들지 못합니다.
+- 시뮬레이션을 Ctrl+C로 끌 때 Gazebo 서버가 `Segmentation fault`를 출력할 수 있습니다. 종료 과정에서만 생기는 현상이라 실습에는 영향이 없습니다.
+- 시뮬레이션을 껐는데도 로봇 토픽이 계속 보이면, 이전 Gazebo 서버가 남아 있는지 `pgrep -af "gz sim"`으로 확인합니다.
 
 ## 목차
 
@@ -75,6 +122,7 @@ ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
 | 원서 (ROS 1) | ROS 2 Jazzy | 처음 다루는 장 |
 |---|---|---|
 | `roscore` (마스터) | 마스터가 없습니다. 노드들이 DDS 디스커버리로 서로를 직접 찾습니다. | 2 |
+| ROS 자체 통신 계층 (TCPROS) | 교체할 수 있는 DDS 구현 (`RMW_IMPLEMENTATION`, 이 가이드는 Cyclone DDS) | 2 |
 | catkin 워크스페이스, `catkin_make` | colcon 워크스페이스, `colcon build` | 2 |
 | catkin 패키지 | `ament_python` 또는 `ament_cmake` 패키지 | 2 |
 | `rosrun`, `roslaunch` | `ros2 run`, `ros2 launch` (launch 파일은 Python, XML, YAML) | 2 |

@@ -71,7 +71,9 @@
 
 - Windows 11 + WSL2 Ubuntu 24.04, ROS 2 Jazzy (`/opt/ros/jazzy`), 실물 로봇 없이 시뮬레이션만 씁니다.
 - 워크스페이스는 `~/rosbook_ws`이고, 패키지는 `~/rosbook_ws/src/` 아래에 만듭니다.
-- `~/.bashrc`는 터미널을 열 때마다 `/opt/ros/jazzy/setup.bash`와 `~/rosbook_ws/install/setup.bash`를 source 하고, `TURTLEBOT3_MODEL=waffle_pi`를 설정합니다.
+- `~/.bashrc`는 터미널을 열 때마다 `/opt/ros/jazzy/setup.bash`와 `~/rosbook_ws/install/setup.bash`를 source 하고, `TURTLEBOT3_MODEL=waffle_pi`, `GALLIUM_DRIVER=d3d12`, `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`를 설정합니다.
+- RMW는 Cyclone DDS입니다. 이 WSL(`networkingMode=mirrored`)에서는 Fast DDS로 프로세스 사이에 데이터가 전달되지 않기 때문입니다. 이유는 README의 "실습 환경"에서 설명하므로, 장 문서는 이 설정을 전제로 쓰고 Fast DDS 전용 설정(XML 프로파일, `FASTDDS_` 환경 변수)을 쓰지 않습니다. RMW를 직접 바꿔 보는 실험은 2장에서만 다룹니다.
+- `ros2` CLI의 결과가 실제 상태와 다르게 보이면 `ros2 daemon stop`으로 daemon을 내린 뒤 다시 실행합니다.
 - 빌드 명령은 `cd ~/rosbook_ws && colcon build --symlink-install --packages-select <패키지>`입니다.
   새 패키지를 처음 빌드했거나 새 실행 파일을 추가했다면, 이미 열려 있던 터미널에서 `source ~/rosbook_ws/install/setup.bash`를 다시 실행해야 합니다.
 - TurtleBot3 시뮬은 `ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py`로 띄웁니다.
