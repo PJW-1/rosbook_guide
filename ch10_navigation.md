@@ -609,7 +609,7 @@ planner_server가 경로를 찾지 못해 실패를 알리고, bt_navigator는 �
 - 확인함 (설치된 Jazzy에서 직접 실행 또는 파일 확인):
   - 패키지 설치와 버전: `apt-cache policy`로 ros-jazzy-navigation2, ros-jazzy-nav2-bringup, ros-jazzy-nav2-simple-commander 1.3.13, ros-jazzy-turtlebot3-navigation2 2.3.6.
   - `ros2 interface show`로 `nav2_msgs/action/NavigateToPose`, `geometry_msgs/msg/PoseWithCovarianceStamped`, `nav2_msgs/msg/ParticleCloud`.
-  - 실습 10-1 전체를 별도 워크스페이스에서 실행: `nav_bot` 빌드와 `colcon test`(3 tests, 0 failures, 1 skipped), `patrol`이 가짜 서버를 상대로 목표 2개를 수락·피드백·도착 후 스스로 종료(약 7초), `ros2 node info /fake_nav_server`의 Action Servers, `ros2 action send_goal --feedback`의 피드백 5.0~1.0과 `SUCCEEDED`.
+  - 실습 10-1 전체를 별도 워크스페이스에서 실행: `nav_bot` 빌드와 `colcon test`(3 tests, 0 failures, 1 skipped), `patrol`이 가짜 서버를 상대로 목표 2개를 수락·피드백·도착 후 스스로 종료(약 7초), `ros2 node info /fake_nav_server`의 Action Servers, `ros2 action list -t`(`/navigate_to_pose [nav2_msgs/action/NavigateToPose]`), `ros2 action info /navigate_to_pose -t`(Action servers: 1, `/fake_nav_server`), `ros2 action send_goal --feedback`의 피드백 5.0~1.0과 `SUCCEEDED`.
   - 4절 중 정수 배열 파라미터 오류, `frame_id: odom` 목표 거절(`Goal was rejected.`).
   - `waffle_pi.yaml`로 amcl, velocity_smoother(`cmd_vel:=cmd_vel_nav` 재매핑), collision_monitor를 하나씩 configure: amcl의 토픽·서비스 목록(`/reinitialize_global_localization`, `/set_initial_pose` 포함), `/amcl_pose` QoS(RELIABLE, TRANSIENT_LOCAL), `/cmd_vel_nav` → `/cmd_vel_smoothed` → `/cmd_vel` 흐름과 TwistStamped 타입.
   - launch 파일 읽기: `turtlebot3_navigation2/launch/navigation2.launch.py`(`use_sim_time` 기본 false, `map`, `params_file`), `nav2_bringup`의 `bringup_launch.py`(`use_composition` 기본 True), `navigation_launch.py`(`cmd_vel` → `cmd_vel_nav` 재매핑, lifecycle 노드 목록), `localization_launch.py`(map_server, amcl). TurtleBot3 rviz 설정의 도구(SetInitialPose → `/initialpose`, PublishPoint → `/clicked_point`, Nav2 Goal)와 디스플레이(`/particle_cloud`, `/plan`, `/local_plan`, costmap). `nav2_simple_commander`의 `waitUntilNav2Active`, `goToPose`, `TaskResult` 소스.
@@ -617,5 +617,4 @@ planner_server가 경로를 찾지 못해 실패를 알리고, bt_navigator는 �
 - 확인 못 함:
   - Gazebo, rviz2, Nav2 전체 스택을 띄우는 실습 10-2~10-6 전부 (GUI, 그리고 전체 스택 실행은 검증 범위 밖). 특히 Nav2 전체가 `waffle_pi.yaml`로 active까지 가는지(6절 마지막 항목), `ros2 component list` 출력, 초기 위치 뒤 `map → odom` 발행, 파티클 수렴, 실제 주행과 `patrol`의 Nav2 상대 동작, 기본 목표 좌표 (4.0, 1.0)이 빈 공간인지.
   - `patrol_commander`는 빌드와 lint만 통과. 실행은 amcl이 필요해 확인하지 못함.
-  - 이 검증 환경에서 `ros2 action list -t`, `ros2 action info`는 daemon 문제로 출력 없이 끝나 확인하지 못함 (같은 내용은 `ros2 node info`의 Action Servers로 확인).
   - 4절 표 중 `use_sim_time` 누락, 초기 위치 없이 목표 전송, 텔레옵 충돌, controller_server 비활성화, `/amcl_pose` VOLATILE 실험의 실제 출력.
