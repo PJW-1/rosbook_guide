@@ -133,18 +133,18 @@ ros2 daemon start > /dev/null 2>&1
 | 9 | 지도 만들기 | [ch09_building_maps.md](ch09_building_maps.md) | 155~170 | 준비됨 |
 | 10 | 지도 위에서 스스로 움직이기 | [ch10_navigation.md](ch10_navigation.md) | 171~184 | 준비됨 |
 | 11 | 체스 두는 로봇팔 (Chess-bot) | [ch11_chess_bot.md](ch11_chess_bot.md) | 185~209 | 준비됨 |
-| 12 | Follow-bot | [ch12_follow_bot.md](ch12_follow_bot.md) | 213~228 | 작성 중 |
-| 13 | 순찰하기 | [ch13_on_patrol.md](ch13_on_patrol.md) | 229~244 | 작성 중 |
-| 14 | Stockroom-bot | [ch14_stockroom_bot.md](ch14_stockroom_bot.md) | 245~276 | 작성 중 |
+| 12 | 카메라로 선 따라가기 | [ch12_follow_bot.md](ch12_follow_bot.md) | 213~228 | 준비됨 |
+| 13 | 순찰하기 | [ch13_on_patrol.md](ch13_on_patrol.md) | 229~244 | 준비됨 |
+| 14 | 창고에서 물건 가져오기 | [ch14_stockroom_bot.md](ch14_stockroom_bot.md) | 245~276 | 준비됨 |
 | 15 | 나만의 센서와 액추에이터 | [ch15_sensors_and_actuators.md](ch15_sensors_and_actuators.md) | 279~294 | 준비됨 |
 | 16 | 나만의 이동 로봇 1부 | [ch16_mobile_robot_part1.md](ch16_mobile_robot_part1.md) | 295~318 | 준비됨 |
 | 17 | 나만의 이동 로봇 2부 | [ch17_mobile_robot_part2.md](ch17_mobile_robot_part2.md) | 319~338 | 준비됨 |
 | 18 | 나만의 로봇팔 | [ch18_robot_arm.md](ch18_robot_arm.md) | 339~366 | 준비됨 |
-| 19 | 소프트웨어 라이브러리 붙이기 | [ch19_software_library.md](ch19_software_library.md) | 367~376 | 작성 중 |
-| 20 | 도구 | [ch20_tools.md](ch20_tools.md) | 379~394 | 작성 중 |
-| 21 | 로봇 동작 디버깅 | [ch21_debugging.md](ch21_debugging.md) | 395~418 | 작성 중 |
-| 22 | ROS 커뮤니티 | [ch22_community.md](ch22_community.md) | 419~424 | 작성 중 |
-| 23 | C++로 ROS 쓰기 | [ch23_cpp.md](ch23_cpp.md) | 425~436 | 작성 중 |
+| 19 | 소프트웨어 라이브러리 붙이기 | [ch19_software_library.md](ch19_software_library.md) | 367~376 | 준비됨 |
+| 20 | 도구 | [ch20_tools.md](ch20_tools.md) | 379~394 | 준비됨 |
+| 21 | 로봇 동작 디버깅 | [ch21_debugging.md](ch21_debugging.md) | 395~418 | 준비됨 |
+| 22 | ROS 커뮤니티 | [ch22_community.md](ch22_community.md) | 419~424 | 준비됨 |
+| 23 | ROS 2에서 C++ 쓰기 | [ch23_cpp.md](ch23_cpp.md) | 425~436 | 준비됨 |
 
 ## ROS 1 (원서) → ROS 2 Jazzy 공통 대응표
 

@@ -46,7 +46,7 @@ patrol (ActionClient) ──goal──> /navigate_to_pose (nav2_msgs/action/Navi
 
 ### 실습 13-1. Nav2 액션을 명령줄로 다뤄 보기
 
-**준비**: 9~10장에서 저장한 지도 파일 이름을 확인합니다. 아래에서는 `MAP=~/rosbook_ws/maps/map.yaml`로 적었으니 자신의 파일 이름으로 바꿉니다. 터미널 4개를 씁니다.
+**준비**: 9~10장에서 저장한 지도 파일 이름을 확인합니다. 9장에서 저장한 이름대로 `MAP=~/rosbook_ws/maps/tb3_world.yaml`로 적었으니, 다른 이름으로 저장했다면 그 이름으로 바꿉니다. 터미널 4개를 씁니다.
 
 **직접 입력**:
 
@@ -57,7 +57,7 @@ ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
 
 터미널 2:
 ```bash
-MAP=~/rosbook_ws/maps/map.yaml
+MAP=~/rosbook_ws/maps/tb3_world.yaml
 ros2 launch turtlebot3_navigation2 navigation2.launch.py use_sim_time:=True map:=$MAP
 ```
 
