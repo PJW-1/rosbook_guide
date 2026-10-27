@@ -697,9 +697,10 @@ source ~/rosbook_ws/install/setup.bash
 ros2 run basics message_publisher
 ```
 
-터미널 B:
+터미널 B는 `basics_interfaces`를 처음 빌드하기 전에 열었을 수 있으므로 overlay를 다시 source합니다. source하지 않으면 이 터미널은 새 패키지를 모르기 때문에 `echo`와 `message_subscriber`가 `Complex` 타입을 찾지 못합니다.
 
 ```bash
+source ~/rosbook_ws/install/setup.bash
 ros2 topic list -t
 ros2 topic echo /complex --once
 ros2 run basics message_subscriber
