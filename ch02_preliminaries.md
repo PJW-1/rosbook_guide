@@ -121,7 +121,7 @@ ROS_DOMAIN_ID=5 ros2 run demo_nodes_py listener
 
 **관찰**: 이 listener는 아무것도 받지 못합니다. 터미널 C에서 `ros2 node list`를 하면 `/talker`만 보이고, `ROS_DOMAIN_ID=5 ros2 node list`를 하면 `/listener`만 보입니다. 확인했으면 listener를 원래대로(`ROS_DOMAIN_ID` 없이) 다시 띄웁니다.
 
-**이 PC에서의 주의점**: 이 WSL은 `127.0.0.1`의 닫힌 포트로 연결을 시도하면 바로 거부되지 않고 시간이 다 될 때까지 기다립니다. `ros2` CLI는 daemon이 떠 있는지 확인하려고 그 포트에 연결해 보므로, 그 도메인에 daemon이 없으면 `ros2 node list`, `ros2 topic list`, `ros2 doctor` 같은 명령이 1~2분 동안 멈춘 듯 보일 수 있습니다. 이럴 때는 Ctrl-C로 멈추고 `ros2 daemon start`를 먼저 실행합니다. `ros2 daemon start`는 daemon이 없어도 1초 안에 끝납니다. `ros2 daemon stop`을 쓴 뒤에는 바로 `ros2 daemon start`를 붙여서, daemon이 없는 상태로 두지 않습니다. 위의 `ROS_DOMAIN_ID=5 ros2 node list`도 도메인 5용 daemon이 따로 필요하므로, 멈추면 `ROS_DOMAIN_ID=5 ros2 node list --no-daemon`으로 실행합니다.
+**이 PC에서의 주의점**: 이 WSL은 `127.0.0.1`의 닫힌 포트로 연결을 시도하면 바로 거부되지 않고 시간이 다 될 때까지 기다립니다. `ros2` CLI는 daemon이 떠 있는지 확인하려고 그 포트에 연결해 보므로, 그 도메인에 daemon이 없으면 `ros2 node list`, `ros2 topic list`, `ros2 doctor` 같은 명령이 약 2분 17초 동안 멈췄다가 Python Traceback을 내고 끝납니다. 이럴 때는 Ctrl-C로 멈추고 `ros2 daemon start`를 먼저 실행합니다. `ros2 daemon start`는 daemon이 없어도 1초 안에 끝납니다. `ros2 daemon stop`을 쓴 뒤에는 바로 `ros2 daemon start`를 붙여서, daemon이 없는 상태로 두지 않습니다. 위의 `ROS_DOMAIN_ID=5 ros2 node list`도 도메인 5용 daemon이 따로 필요하므로, 멈추면 `ROS_DOMAIN_ID=5 ros2 node list --no-daemon`으로 실행합니다.
 
 **생각해 볼 질문**: ROS 1에서 `roscore`를 끄면 이미 연결된 노드끼리는 어떻게 되었을까요? ROS 2에서 daemon을 끈 것과 무엇이 같고 무엇이 다를까요?
 
@@ -602,7 +602,7 @@ rviz2
 |---|---|---|
 | listener를 `--ros-args -r chatter:=chater`로 실행 (오타) | listener가 아무것도 받지 못하고, 오류도 나지 않습니다. | `ros2 topic list`에 `/chatter`와 `/chater`가 따로 보입니다. `ros2 topic info /chater`의 Publisher count는 0입니다. |
 | listener만 `ROS_DOMAIN_ID=5`로 실행 | 아무것도 받지 못합니다. | `ros2 node list`와 `ROS_DOMAIN_ID=5 ros2 node list --no-daemon`의 결과를 비교합니다. |
-| `ros2 daemon stop` 후 `ros2 daemon start` 없이 `ros2 node list` | 이 PC에서는 1~2분 동안 출력 없이 멈춥니다. 노드끼리는 계속 통신합니다. | Ctrl-C 후 `ros2 daemon start`, 다시 `ros2 node list`. |
+| `ros2 daemon stop` 후 `ros2 daemon start` 없이 `ros2 node list` | 이 PC에서는 약 2분 동안 출력 없이 멈췄다가 Traceback을 내고 끝납니다. 노드끼리는 계속 통신합니다. | Ctrl-C 후 `ros2 daemon start`, 다시 `ros2 node list`. |
 | `setup.py`에서 launch 파일 `data_files` 줄을 지우고 다시 빌드 | `ros2 launch basics talker_listener.launch.py`가 `file 'talker_listener.launch.py' was not found in the share directory of package 'basics'`로 실패합니다. | `ls ~/rosbook_ws/install/basics/share/basics/` |
 | 빌드 후 `source ~/rosbook_ws/install/setup.bash`를 하지 않은 새 패키지 사용 | `Package 'basics' not found` | `echo $AMENT_PREFIX_PATH`, `ros2 pkg prefix basics` |
 | `ros2 run demo_nodes_py talkr` (실행 파일 오타) | `No executable found` | `ros2 pkg executables demo_nodes_py` |

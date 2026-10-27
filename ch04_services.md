@@ -165,12 +165,7 @@ if __name__ == '__main__':
     },
 ```
 
-파일: `~/rosbook_ws/src/basics/package.xml`에 다음 줄이 없으면 `<test_depend>` 줄들 위에 추가합니다. 3장에서 `Complex.msg`를 쓰려고 이미 넣었다면 건너뜁니다.
-
-```xml
-  <exec_depend>rclpy</exec_depend>
-  <exec_depend>basics_interfaces</exec_depend>
-```
+`~/rosbook_ws/src/basics/package.xml`은 고칠 것이 없습니다. 3장에서 넣은 `<depend>rclpy</depend>`와 `<depend>basics_interfaces</depend>`가 실행 의존까지 포함하기 때문입니다. `depend` 한 줄은 `build_depend`, `build_export_depend`, `exec_depend`를 모두 적은 것과 같습니다.
 
 빌드하고 실행합니다.
 
@@ -457,7 +452,7 @@ ros2 run basics periodic_client
 
 <details><summary>Q1. 왜 .srv 파일을 별도 패키지 basics_interfaces에 두었나요?</summary>
 
-ROS 2에서 msg, srv, action 정의를 코드로 생성하는 일은 `rosidl_generate_interfaces()`라는 CMake 함수가 합니다. `basics`는 ament_python 패키지라서 이 함수를 쓸 수 없습니다. 그래서 인터페이스만 담는 ament_cmake 패키지를 따로 두고, Python 노드 패키지는 그것을 `exec_depend`로 가져다 씁니다. 인터페이스를 따로 두면 C++ 노드(23장)나 다른 패키지에서도 같은 타입을 쓸 수 있다는 장점도 있습니다.
+ROS 2에서 msg, srv, action 정의를 코드로 생성하는 일은 `rosidl_generate_interfaces()`라는 CMake 함수가 합니다. `basics`는 ament_python 패키지라서 이 함수를 쓸 수 없습니다. 그래서 인터페이스만 담는 ament_cmake 패키지를 따로 두고, Python 노드 패키지는 그것을 `package.xml`의 의존으로 적어서 가져다 씁니다. 인터페이스를 따로 두면 C++ 노드(23장)나 다른 패키지에서도 같은 타입을 쓸 수 있다는 장점도 있습니다.
 
 </details>
 

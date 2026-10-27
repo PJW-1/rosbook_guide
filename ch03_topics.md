@@ -335,7 +335,7 @@ ros2 run basics topic_subscriber --ros-args -r counter:=latched
 | 옵션 없는 `ros2 topic echo` | `data: 42`를 받습니다. Jazzy의 `echo`는 옵션이 없으면 발견한 publisher의 QoS에 맞춰 구독합니다. |
 | `topic_subscriber`를 `latched`로 리매핑 | 아무것도 받지 못합니다. 코드에 QoS `10`, 즉 VOLATILE로 구독하기 때문입니다. |
 
-`--qos-durability transient_local`만 주고 reliability를 빼면 이 PC에서는 받지 못했습니다. 늦게 온 subscriber에게 보관 메시지를 확실히 받으려면 durability와 reliability를 모두 맞춥니다.
+`--qos-durability transient_local`만 주고 reliability를 빼면 이 PC에서는 받지 못했습니다. `ros2 topic echo`는 QoS 옵션을 하나라도 받으면 `sensor_data` 프로파일(BEST_EFFORT)을 바탕으로 삼고, 지정한 항목만 바꾸기 때문입니다. 즉 이 명령은 BEST_EFFORT와 TRANSIENT_LOCAL로 구독했고, 이 조합으로는 보관된 메시지를 받지 못했습니다. 늦게 온 subscriber에게 보관 메시지를 확실히 받으려면 durability와 reliability를 모두 맞춥니다.
 
 `ros2 topic info -v /latched`로 publisher의 QoS가 `TRANSIENT_LOCAL`, `KEEP_LAST (1)`인 것도 확인합니다. 2장 실습 2-9의 `/tf_static`과 같은 설정입니다.
 

@@ -618,7 +618,7 @@ ros2 topic hz /cmd_vel
 
 <details><summary>Q6. 노드 하나씩 끄면?</summary>
 
-`key_publisher`만 끄면 `keys_to_twist_with_ramps`는 마지막 목표 속도를 계속 20 Hz로 보내므로 로봇이 계속 움직입니다. 터미널 2의 노드를 끄면 `/cmd_vel`의 publisher가 사라지고, 이후 동작은 Gazebo DiffDrive가 마지막 명령을 어떻게 다루는지에 달려 있습니다. 어느 쪽이든 "입력이 끊기면 멈춘다"는 처리가 없다는 점이 이 설계의 약점입니다.
+`key_publisher`만 끄면 `keys_to_twist_with_ramps`는 마지막 목표 속도를 계속 20 Hz로 보내므로 로봇이 계속 움직입니다. 터미널 2의 노드를 끄면 `/cmd_vel`의 publisher가 사라지고, 이후 동작은 Gazebo DiffDrive가 마지막 명령을 어떻게 다루는지에 달려 있습니다. 같은 DiffDrive 시스템을 쓰는 16~17장 로봇의 검증에서는 마지막 명령을 계속 수행했으므로, TB3도 계속 움직일 것으로 예상합니다. 어느 쪽이든 "입력이 끊기면 멈춘다"는 처리가 없다는 점이 이 설계의 약점입니다.
 
 </details>
 

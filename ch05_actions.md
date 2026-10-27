@@ -276,7 +276,7 @@ if __name__ == '__main__':
             'simple_action_client = basics.simple_action_client:main',
 ```
 
-`package.xml`의 의존은 4장에서 넣은 `rclpy`, `basics_interfaces`로 충분합니다.
+`package.xml`의 의존은 3장에서 넣은 `rclpy`, `basics_interfaces`로 충분합니다.
 
 ```bash
 cd ~/rosbook_ws && colcon build --symlink-install --packages-select basics_interfaces basics
@@ -483,7 +483,7 @@ if __name__ == '__main__':
 | 43~47 | feedback 메시지를 채웁니다. rclpy의 `Duration`끼리는 뺄셈이 지원되지 않아서(`TypeError`), 나노초 정수로 빼서 새 `Duration`을 만듭니다. |
 | 48 | feedback을 보냅니다. 내부적으로는 `/timer/_action/feedback` 토픽에 goal ID와 함께 발행됩니다. |
 | 49~50 | 횟수를 세고 1초 쉽니다. 원서처럼 1초에 한 번 보고하는 구조입니다. |
-| 52~56 | 반복문을 빠져나온 뒤에도 취소 요청을 한 번 더 확인합니다. 마지막 `time.sleep(1.0)` 도중에 취소가 수락되면, 깨어났을 때 이미 시간이 다 되어 반복문이 그대로 끝나기 때문입니다. 이 확인이 없으면 서버는 `succeed()`를 부르고, 액션의 상태 규칙이 CANCELING에서 SUCCEEDED로 가는 것을 허용하므로 클라이언트는 취소를 수락받고도 `SUCCEEDED`를 받습니다. |
+| 52~56 | 반복문을 빠져나온 뒤에도 취소 요청을 한 번 더 확인합니다. 마지막 `time.sleep(1.0)` 도중에 취소가 수락되면, 깨어났을 때 이미 시간이 다 되어 반복문이 그대로 끝나기 때문입니다. 이 확인이 없으면 서버는 `succeed()`를 부르고, 액션의 상태 규칙이 CANCELING에서 SUCCEEDED로 가는 것을 허용하므로 클라이언트는 취소를 수락받고도 `SUCCEEDED`를 받습니다. 이 확인으로도 막지 못하는 틈은 남습니다. 53번 줄의 확인과 57번 줄의 `succeed()` 사이에 취소가 수락되면 여전히 `SUCCEEDED`가 나갑니다. 이것도 액션 규칙이 허용하는 결과이므로, 클라이언트는 취소를 요청했더라도 최종 상태를 보고 판단합니다. |
 | 57~59 | 끝까지 기다렸고 취소 요청도 없었으면 성공으로 끝냅니다. |
 | 65~68 | `rclpy.spin(node)` 대신 `MultiThreadedExecutor`로 돌립니다. `execute`가 `time.sleep()`으로 한 스레드를 붙잡고 있는 동안 다른 스레드가 취소 요청을 받아 `on_cancel`을 실행해야 하기 때문입니다. |
 

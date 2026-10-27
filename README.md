@@ -63,7 +63,9 @@ rmw (미들웨어 인터페이스)
 DDS 구현: Fast DDS 또는 Cyclone DDS   ← RMW_IMPLEMENTATION이 고르는 부분
 ```
 
-이 PC의 WSL은 `networkingMode=mirrored`로 설정되어 있습니다. 이 환경에서 Fast DDS로 `demo_nodes_cpp`의 talker와 listener를 띄웠더니, `ros2 topic list`에는 토픽이 보였지만 listener는 10초 동안 메시지를 한 건도 받지 못했습니다. 탐색 범위를 `LOCALHOST`나 `SUBNET`으로 바꿔도, UDP만 쓰도록 해도 결과가 같았습니다. 같은 시험을 Cyclone DDS로 하면 메시지가 정상적으로 도착했습니다. mirrored 네트워크 모드가 원인으로 보이지만, NAT 모드로 되돌려서 확인하지는 않았습니다.
+이 PC의 WSL은 `networkingMode=mirrored`로 설정되어 있습니다. 이 환경에서 Fast DDS로 `demo_nodes_cpp`의 talker와 listener를 띄웠더니, `ros2 topic list`에는 토픽이 보였지만 listener는 10초 동안 메시지를 한 건도 받지 못했습니다. 탐색 범위를 `LOCALHOST`나 `SUBNET`으로 바꿔도, UDP만 쓰도록 해도 결과가 같았습니다.
+
+다만 Fast DDS가 이 환경에서 항상 실패하는 것은 아닙니다. 가이드를 검증하는 도중 `LOCALHOST`에서 메시지가 도착한 적이 있어서, C++와 Python 데모, 기본 범위와 `LOCALHOST`를 섞어 16번 다시 시험했습니다. 15번은 한 건도 받지 못했고, 1번(Python, `LOCALHOST`)만 받았습니다. 같은 날 Cyclone DDS는 4번 모두 받았습니다. 될 때와 안 될 때가 섞이면, 메시지가 오지 않을 때 내 코드가 틀린 것인지 통신이 안 되는 것인지 가릴 수 없습니다. 구조를 익히는 데 방해가 되므로 이 가이드는 Cyclone DDS를 씁니다. mirrored 네트워크 모드가 원인으로 보이지만, NAT 모드로 되돌려서 확인하지는 않았습니다.
 
 Cyclone DDS 패키지(`ros-jazzy-rmw-cyclonedds-cpp`)는 이 PC에 ROS 2 Jazzy와 함께 이미 설치되어 있습니다. 다른 PC에서 따라 한다면 `RMW_IMPLEMENTATION`을 설정하기 전에 `sudo apt install ros-jazzy-rmw-cyclonedds-cpp`로 먼저 설치합니다.
 
