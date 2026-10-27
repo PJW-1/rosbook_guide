@@ -183,7 +183,7 @@ int main(int argc, char ** argv)
 | `class TopicPublisher : public rclcpp::Node` | `class TopicPublisher(Node):` | 노드를 상속해 자기 노드를 만듭니다. 원서의 ROS 1 코드에는 클래스가 없었지만, ROS 2에서는 이 형태가 표준입니다. |
 | `: Node("topic_publisher"), count_(0)` | `super().__init__('topic_publisher')`, `self.count = 0` | 부모 생성자에 노드 이름을 주고, 멤버 변수를 초기화합니다. |
 | `create_publisher<std_msgs::msg::Int32>("counter", 10)` | `self.create_publisher(Int32, 'counter', 10)` | C++은 메시지 타입을 꺾쇠 `< >` 안의 템플릿 인자로 줍니다. |
-| `create_wall_timer(500ms, [this]() {on_timer();})` | `self.create_timer(0.5, self.on_timer)` | `[this]() {...}` 는 람다(이름 없는 함수)입니다. `this` 를 붙잡아 두어야 멤버 함수를 부를 수 있습니다. `wall_timer` 는 `use_sim_time` 과 상관없이 컴퓨터 시계로 도는 타이머입니다. |
+| `create_wall_timer(500ms, [this]() {on_timer();})` | `self.create_timer(0.5, self.timer_callback)` | `[this]() {...}` 는 람다(이름 없는 함수)입니다. `this` 를 붙잡아 두어야 멤버 함수를 부를 수 있습니다. `wall_timer` 는 `use_sim_time` 과 상관없이 컴퓨터 시계로 도는 타이머입니다. |
 | `std_msgs::msg::Int32 msg;` | `msg = Int32()` | 메시지 객체를 만듭니다. C++은 스택에 바로 만듭니다. |
 | `pub_->publish(msg);` | `self.pub.publish(msg)` | `pub_` 는 공유 포인터라 `->` 로 호출합니다. |
 | `rclcpp::Publisher<...>::SharedPtr pub_;` | 해당 없음 | C++은 멤버 변수의 타입을 클래스 안에 선언해야 합니다. 이름 끝의 `_` 는 멤버 변수 표시 관례입니다. |

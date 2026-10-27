@@ -85,7 +85,7 @@
 | 장 | 패키지 | 빌드 타입 | 비고 |
 |---|---|---|---|
 | 2~5, 20~21 | `basics` | ament_python | 원서의 basics 패키지에 대응합니다. 실행 파일 이름은 원서 스크립트 이름에서 `.py`를 뺀 것입니다. |
-| 3~5 | `basics_interfaces` | ament_cmake | 3장에서 `msg/Complex.msg`, 4장에서 `srv/WordCount.srv`, 5장에서 `action/Timer.action`을 차례로 추가합니다. |
+| 3~5, 19 | `basics_interfaces` | ament_cmake | 3장에서 `msg/Complex.msg`, 4장에서 `srv/WordCount.srv`, 5장에서 `action/Timer.action`, 19장에서 `action/Talk.action`을 차례로 추가합니다. |
 | 6 | (없음) | | TurtleBot3 시뮬을 띄우고 관찰만 하므로 패키지를 만들지 않습니다. |
 | 7 | `wander_bot` | ament_python | |
 | 8 | `teleop_bot` | ament_python | |

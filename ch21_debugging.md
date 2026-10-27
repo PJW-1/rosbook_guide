@@ -514,14 +514,14 @@ ros2 run rqt_bag rqt_bag ~/wave_bag
 
 **준비**: 읽기 실습입니다. 이 가이드를 만드는 동안 실제로 겪은 문제를 원서의 순서(로그, 연결, 데이터)로 좁혀 간 기록입니다.
 
-**증상**: WSL2(`networkingMode=mirrored`)에서 `ros2 node list`, `ros2 action list` 같은 명령이 아무것도 출력하지 않고 멈췄습니다. Ctrl+C를 눌러야 끝났습니다. 같은 시간에 노드끼리의 통신은 정상이었습니다.
+**증상**: WSL2(`networkingMode=mirrored`)에서 `ros2 node list`, `ros2 action list` 같은 명령이 아무것도 출력하지 않고 멈췄습니다. 기다리면 약 2분 17초 뒤에 Python Traceback을 내고 끝났습니다. 같은 시간에 노드끼리의 통신은 정상이었습니다.
 
 **좁혀 간 과정**:
 
 1. 로그: 멈춘 명령은 오류를 남기지 않았습니다. 로그로는 단서가 없었습니다.
 2. 비교 실험: 같은 명령에 `--no-daemon --spin-time 3` 을 붙이면 정상으로 끝났습니다. 문제는 노드나 DDS가 아니라 CLI와 daemon 사이에 있다고 좁혔습니다.
 3. 소스 확인: CLI가 daemon에 연결되는지 판단하는 함수 `DaemonNode.connected` (`/opt/ros/jazzy/lib/python3.12/site-packages/ros2cli/node/daemon.py`)를 읽었습니다. 이 함수는 daemon 포트(11511 + `ROS_DOMAIN_ID`)에 접속을 시도하고, **접속이 거절(`ConnectionRefusedError`)되면** "daemon 없음"으로 판단해 다음 단계로 넘어갑니다.
-4. 포트 실험: 이 WSL 설정에서는 닫힌 localhost 포트에 접속하면 거절되지 않고 응답 없이 시간이 흘렀습니다. 그래서 CLI는 "daemon 없음"을 알아채지 못하고 계속 기다렸습니다.
+4. 포트 실험: 이 WSL 설정에서는 닫힌 localhost 포트에 접속하면 거절되지 않고 응답 없이 시간이 흘렀습니다. 그래서 CLI는 "daemon 없음"을 알아채지 못하고 계속 기다렸습니다. 접속 시도는 운영체제의 TCP 재시도 횟수(`tcp_syn_retries` 6)를 다 쓴 약 2분 17초 뒤 시간 초과로 끝나는데, 이 예외는 `ConnectionRefusedError`가 아니라서 처리되지 않고 Traceback이 됩니다.
 5. 해결: 작업 전에 `ros2 daemon start` 로 daemon을 미리 띄우고, `ros2 daemon stop` 을 했다면 바로 `ros2 daemon start` 를 합니다. README의 안내가 이 결과입니다.
 
 **직접 입력**: 소스를 직접 확인해 봅니다.
