@@ -129,15 +129,15 @@ ros2 daemon start > /dev/null 2>&1
 | 7 | Wander-bot | [ch07_wander_bot.md](ch07_wander_bot.md) | 119~128 |
 | 8 | Teleop-bot | [ch08_teleop_bot.md](ch08_teleop_bot.md) | 131~154 |
 | 9 | 지도 만들기 | [ch09_building_maps.md](ch09_building_maps.md) | 155~170 |
-| 10 | 지도 안에서 이동하기 | [ch10_navigation.md](ch10_navigation.md) | 171~184 |
-| 11 | Chess-bot | [ch11_chess_bot.md](ch11_chess_bot.md) | 185~209 |
+| 10 | 지도 위에서 스스로 움직이기 | [ch10_navigation.md](ch10_navigation.md) | 171~184 |
+| 11 | 체스 두는 로봇팔 (Chess-bot) | [ch11_chess_bot.md](ch11_chess_bot.md) | 185~209 |
 | 12 | Follow-bot | [ch12_follow_bot.md](ch12_follow_bot.md) | 213~228 |
 | 13 | 순찰하기 | [ch13_on_patrol.md](ch13_on_patrol.md) | 229~244 |
 | 14 | Stockroom-bot | [ch14_stockroom_bot.md](ch14_stockroom_bot.md) | 245~276 |
-| 15 | 직접 만든 센서와 구동기 | [ch15_sensors_and_actuators.md](ch15_sensors_and_actuators.md) | 279~294 |
-| 16 | 직접 만든 이동 로봇 1부 | [ch16_mobile_robot_part1.md](ch16_mobile_robot_part1.md) | 295~318 |
-| 17 | 직접 만든 이동 로봇 2부 | [ch17_mobile_robot_part2.md](ch17_mobile_robot_part2.md) | 319~338 |
-| 18 | 직접 만든 로봇팔 | [ch18_robot_arm.md](ch18_robot_arm.md) | 339~366 |
+| 15 | 나만의 센서와 액추에이터 | [ch15_sensors_and_actuators.md](ch15_sensors_and_actuators.md) | 279~294 |
+| 16 | 나만의 이동 로봇 1부 | [ch16_mobile_robot_part1.md](ch16_mobile_robot_part1.md) | 295~318 |
+| 17 | 나만의 이동 로봇 2부 | [ch17_mobile_robot_part2.md](ch17_mobile_robot_part2.md) | 319~338 |
+| 18 | 나만의 로봇팔 | [ch18_robot_arm.md](ch18_robot_arm.md) | 339~366 |
 | 19 | 소프트웨어 라이브러리 붙이기 | [ch19_software_library.md](ch19_software_library.md) | 367~376 |
 | 20 | 도구 | [ch20_tools.md](ch20_tools.md) | 379~394 |
 | 21 | 로봇 동작 디버깅 | [ch21_debugging.md](ch21_debugging.md) | 395~418 |

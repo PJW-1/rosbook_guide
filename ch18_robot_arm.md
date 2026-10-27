@@ -1,4 +1,4 @@
-# 18장. 직접 만든 로봇팔 (Your Own Robot Arm)
+# 18장. 나만의 로봇팔 (Your Own Robot Arm)
 
 - 원서: Chapter 18. Your Own Robot Arm, PDF p.339~366 (인쇄 쪽 = PDF 쪽 - 20)
 - 선행 조건: 11장(MoveIt 2 설치, move_group과 `/move_action` 구조), 16~17장의 URDF·xacro·Gazebo 경험이 있으면 좋습니다.
