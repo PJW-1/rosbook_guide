@@ -86,6 +86,7 @@
 |---|---|---|---|
 | 2~5, 20~21 | `basics` | ament_python | 원서의 basics 패키지에 대응합니다. 실행 파일 이름은 원서 스크립트 이름에서 `.py`를 뺀 것입니다. |
 | 3~5 | `basics_interfaces` | ament_cmake | 3장에서 `msg/Complex.msg`, 4장에서 `srv/WordCount.srv`, 5장에서 `action/Timer.action`을 차례로 추가합니다. |
+| 6 | (없음) | | TurtleBot3 시뮬을 띄우고 관찰만 하므로 패키지를 만들지 않습니다. |
 | 7 | `wander_bot` | ament_python | |
 | 8 | `teleop_bot` | ament_python | |
 | 9~10 | `nav_bot` | ament_python | 지도 파일은 `~/rosbook_ws/maps/`에 저장합니다. |
@@ -140,6 +141,7 @@ if __name__ == '__main__':
 - 현재 시각은 `self.get_clock().now()`로 얻습니다. `use_sim_time:=true`로 실행하면 이 값이 `/clock`을 따릅니다.
 - 로그는 `self.get_logger().info()` 계열을 씁니다. `print()`를 쓰지 않는 이유는 21장에서 다룹니다.
 - 실행 파일은 `setup.py`의 `entry_points['console_scripts']`에 등록합니다.
+- import 순서는 `ament_flake8` 규칙을 따릅니다. 표준 라이브러리를 먼저 쓰고 빈 줄을 둔 뒤, 나머지를 모듈 이름의 알파벳순으로 씁니다. 그래서 `from basics_interfaces.srv import WordCount`가 `import rclpy`보다 앞에 옵니다.
 
 ## 7. 문체
 

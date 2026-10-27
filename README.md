@@ -120,31 +120,31 @@ ros2 daemon start > /dev/null 2>&1
 
 ## 목차
 
-| 장 | 제목 | 문서 | 원서 PDF 쪽 |
-|---|---|---|---|
-| 1 | 소개 | [ch01_introduction.md](ch01_introduction.md) | 23~28 |
-| 2 | 기본 도구와 개념 | [ch02_preliminaries.md](ch02_preliminaries.md) | 29~50 |
-| 3 | 토픽 | [ch03_topics.md](ch03_topics.md) | 51~70 |
-| 4 | 서비스 | [ch04_services.md](ch04_services.md) | 71~80 |
-| 5 | 액션 | [ch05_actions.md](ch05_actions.md) | 81~96 |
-| 6 | 로봇과 시뮬레이터 | [ch06_robots_and_simulators.md](ch06_robots_and_simulators.md) | 97~118 |
-| 7 | Wander-bot | [ch07_wander_bot.md](ch07_wander_bot.md) | 119~128 |
-| 8 | Teleop-bot | [ch08_teleop_bot.md](ch08_teleop_bot.md) | 131~154 |
-| 9 | 지도 만들기 | [ch09_building_maps.md](ch09_building_maps.md) | 155~170 |
-| 10 | 지도 위에서 스스로 움직이기 | [ch10_navigation.md](ch10_navigation.md) | 171~184 |
-| 11 | 체스 두는 로봇팔 (Chess-bot) | [ch11_chess_bot.md](ch11_chess_bot.md) | 185~209 |
-| 12 | Follow-bot | [ch12_follow_bot.md](ch12_follow_bot.md) | 213~228 |
-| 13 | 순찰하기 | [ch13_on_patrol.md](ch13_on_patrol.md) | 229~244 |
-| 14 | Stockroom-bot | [ch14_stockroom_bot.md](ch14_stockroom_bot.md) | 245~276 |
-| 15 | 나만의 센서와 액추에이터 | [ch15_sensors_and_actuators.md](ch15_sensors_and_actuators.md) | 279~294 |
-| 16 | 나만의 이동 로봇 1부 | [ch16_mobile_robot_part1.md](ch16_mobile_robot_part1.md) | 295~318 |
-| 17 | 나만의 이동 로봇 2부 | [ch17_mobile_robot_part2.md](ch17_mobile_robot_part2.md) | 319~338 |
-| 18 | 나만의 로봇팔 | [ch18_robot_arm.md](ch18_robot_arm.md) | 339~366 |
-| 19 | 소프트웨어 라이브러리 붙이기 | [ch19_software_library.md](ch19_software_library.md) | 367~376 |
-| 20 | 도구 | [ch20_tools.md](ch20_tools.md) | 379~394 |
-| 21 | 로봇 동작 디버깅 | [ch21_debugging.md](ch21_debugging.md) | 395~418 |
-| 22 | ROS 커뮤니티 | [ch22_community.md](ch22_community.md) | 419~424 |
-| 23 | C++로 ROS 쓰기 | [ch23_cpp.md](ch23_cpp.md) | 425~436 |
+| 장 | 제목 | 문서 | 원서 PDF 쪽 | 상태 |
+|---|---|---|---|---|
+| 1 | 소개 | [ch01_introduction.md](ch01_introduction.md) | 23~28 | 준비됨 |
+| 2 | 기본 도구와 개념 | [ch02_preliminaries.md](ch02_preliminaries.md) | 29~50 | 준비됨 |
+| 3 | 토픽 | [ch03_topics.md](ch03_topics.md) | 51~70 | 준비됨 |
+| 4 | 서비스 | [ch04_services.md](ch04_services.md) | 71~80 | 준비됨 |
+| 5 | 액션 | [ch05_actions.md](ch05_actions.md) | 81~96 | 준비됨 |
+| 6 | 로봇과 시뮬레이터 | [ch06_robots_and_simulators.md](ch06_robots_and_simulators.md) | 97~118 | 준비됨 |
+| 7 | Wander-bot | [ch07_wander_bot.md](ch07_wander_bot.md) | 119~128 | 준비됨 |
+| 8 | Teleop-bot | [ch08_teleop_bot.md](ch08_teleop_bot.md) | 131~154 | 준비됨 |
+| 9 | 지도 만들기 | [ch09_building_maps.md](ch09_building_maps.md) | 155~170 | 준비됨 |
+| 10 | 지도 위에서 스스로 움직이기 | [ch10_navigation.md](ch10_navigation.md) | 171~184 | 준비됨 |
+| 11 | 체스 두는 로봇팔 (Chess-bot) | [ch11_chess_bot.md](ch11_chess_bot.md) | 185~209 | 준비됨 |
+| 12 | Follow-bot | [ch12_follow_bot.md](ch12_follow_bot.md) | 213~228 | 작성 중 |
+| 13 | 순찰하기 | [ch13_on_patrol.md](ch13_on_patrol.md) | 229~244 | 작성 중 |
+| 14 | Stockroom-bot | [ch14_stockroom_bot.md](ch14_stockroom_bot.md) | 245~276 | 작성 중 |
+| 15 | 나만의 센서와 액추에이터 | [ch15_sensors_and_actuators.md](ch15_sensors_and_actuators.md) | 279~294 | 준비됨 |
+| 16 | 나만의 이동 로봇 1부 | [ch16_mobile_robot_part1.md](ch16_mobile_robot_part1.md) | 295~318 | 준비됨 |
+| 17 | 나만의 이동 로봇 2부 | [ch17_mobile_robot_part2.md](ch17_mobile_robot_part2.md) | 319~338 | 준비됨 |
+| 18 | 나만의 로봇팔 | [ch18_robot_arm.md](ch18_robot_arm.md) | 339~366 | 준비됨 |
+| 19 | 소프트웨어 라이브러리 붙이기 | [ch19_software_library.md](ch19_software_library.md) | 367~376 | 작성 중 |
+| 20 | 도구 | [ch20_tools.md](ch20_tools.md) | 379~394 | 작성 중 |
+| 21 | 로봇 동작 디버깅 | [ch21_debugging.md](ch21_debugging.md) | 395~418 | 작성 중 |
+| 22 | ROS 커뮤니티 | [ch22_community.md](ch22_community.md) | 419~424 | 작성 중 |
+| 23 | C++로 ROS 쓰기 | [ch23_cpp.md](ch23_cpp.md) | 425~436 | 작성 중 |
 
 ## ROS 1 (원서) → ROS 2 Jazzy 공통 대응표
 
