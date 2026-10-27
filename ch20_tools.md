@@ -679,7 +679,7 @@ ros2 service list -t
   - `ros2 node` 하위 명령이 `info`, `list` 뿐인 것, `ros2 param` 하위 명령 목록, `ros2 launch` 의 `--show-args`/`--print`/`--debug`/`--launch-prefix`, `ros2 run --prefix`.
 - 확인 못 함:
   - `colcon_cd basics` 를 실제로 실행해 이동하는 것(함수 파일만 확인했습니다).
-  - daemon을 껐다 켠 직후 `ros2 node list` 가 비어 있다가 채워지는 시간. 검증 환경에서는 `ros2 daemon stop` 자체가 20초 시간 제한에 걸린 적이 있었습니다.
+  - daemon을 껐다 켠 직후 `ros2 node list` 가 비어 있다가 채워지는 시간. 검증 환경에서는 `ros2 daemon stop` 자체가 20초 시간 제한에 걸린 적이 있었습니다. README에 적은 측정에서 daemon이 이미 꺼져 있을 때는 `ros2 daemon stop`도 약 2분 17초 멈췄으므로, 이 경우였을 가능성이 큽니다.
   - Ctrl+C로 launch를 멈출 때의 `KeyboardInterrupt` 트레이스백이 생기는 정확한 원인. 검증에서는 launch 프로세스에 SIGINT를 보내 재현했고, 학습자의 터미널 Ctrl+C와 완전히 같은 조건은 아닙니다.
   - `launch_arguments` 를 지웠을 때(Q6), `data_files` 를 뺐을 때, 테스트 토픽 오타의 실제 출력 문구.
   - Fast DDS에서의 동작. 이 가이드는 README의 안내대로 Cyclone DDS를 전제로 합니다.
