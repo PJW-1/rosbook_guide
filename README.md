@@ -65,10 +65,12 @@ DDS 구현: Fast DDS 또는 Cyclone DDS   ← RMW_IMPLEMENTATION이 고르는 �
 
 이 PC의 WSL은 `networkingMode=mirrored`로 설정되어 있습니다. 이 환경에서 Fast DDS로 `demo_nodes_cpp`의 talker와 listener를 띄웠더니, `ros2 topic list`에는 토픽이 보였지만 listener는 10초 동안 메시지를 한 건도 받지 못했습니다. 탐색 범위를 `LOCALHOST`나 `SUBNET`으로 바꿔도, UDP만 쓰도록 해도 결과가 같았습니다. 같은 시험을 Cyclone DDS로 하면 메시지가 정상적으로 도착했습니다. mirrored 네트워크 모드가 원인으로 보이지만, NAT 모드로 되돌려서 확인하지는 않았습니다.
 
+Cyclone DDS 패키지(`ros-jazzy-rmw-cyclonedds-cpp`)는 이 PC에 ROS 2 Jazzy와 함께 이미 설치되어 있습니다. 다른 PC에서 따라 한다면 `RMW_IMPLEMENTATION`을 설정하기 전에 `sudo apt install ros-jazzy-rmw-cyclonedds-cpp`로 먼저 설치합니다.
+
 RMW를 바꿔도 노드 코드, 토픽과 서비스 이름, QoS, launch 파일, `ros2` 명령은 모두 그대로입니다. 원서의 실습 내용도 영향을 받지 않습니다. 다만 다음 세 가지는 알아 두어야 합니다.
 
 - 서로 통신하는 터미널은 모두 같은 RMW를 써야 합니다. `.bashrc`를 고치기 전에 열어 둔 터미널은 닫고 새로 엽니다.
-- RMW를 바꾼 뒤에는 `ros2 daemon stop`을 한 번 실행합니다. 백그라운드에 떠 있던 daemon은 예전 RMW로 동작하고 있기 때문입니다.
+- RMW를 바꾼 뒤에는 `ros2 daemon stop`과 `ros2 daemon start`를 이어서 실행해 daemon을 다시 띄웁니다. 백그라운드에 떠 있던 daemon은 예전 RMW로 동작하고 있기 때문입니다. daemon은 바로 아래 절에서 설명합니다.
 - 인터넷 자료에 나오는 Fast DDS 전용 설정(XML 프로파일, Discovery Server, `FASTDDS_` 로 시작하는 환경 변수)은 이 환경에 적용되지 않습니다.
 
 현재 쓰고 있는 RMW는 다음 명령으로 확인합니다. 2장에서 두 RMW를 직접 바꿔 가며 비교해 봅니다.
@@ -76,6 +78,31 @@ RMW를 바꿔도 노드 코드, 토픽과 서비스 이름, QoS, launch 파일, 
 ```bash
 ros2 doctor --report | grep -i middleware
 ```
+
+### `ros2` 명령이 2분 넘게 멈출 때: daemon 먼저 띄우기
+
+`ros2 topic list`나 `ros2 node list` 같은 명령은 매번 네트워크를 처음부터 탐색하지 않습니다. 백그라운드에 떠 있는 `ros2 daemon`이라는 프로세스가 탐색 결과를 계속 모아 두고, CLI는 localhost의 TCP 포트(11511 + `ROS_DOMAIN_ID`)로 daemon에게 결과를 물어봅니다. 원래는 daemon이 없으면 연결이 곧바로 거절되고, CLI가 daemon을 새로 띄운 뒤 결과를 보여 줍니다.
+
+이 WSL에서는 daemon이 없을 때 연결이 거절되지 않고, 응답을 기다리다가 시간 초과로 끝납니다. mirrored 네트워크 모드에서 생기는 현상으로 보입니다. 직접 재어 보니 daemon이 없는 상태에서 `ros2 daemon status`와 `ros2 topic list`는 각각 약 2분 17초 동안 멈췄다가 Python Traceback을 내고 끝났고, daemon도 새로 뜨지 않았습니다. WSL을 새로 시작한 직후나 `ros2 daemon stop`을 실행한 뒤가 바로 이런 상태입니다. `ros2 doctor`, `ros2 topic echo`, `ros2 daemon stop`도 같은 방식으로 멈춥니다.
+
+해결 방법은 CLI를 쓰기 전에 daemon을 먼저 띄우는 것입니다. `ros2 daemon start`는 연결을 시도하지 않고 포트를 직접 열어 보는 방식이라 1초 안에 끝나고, daemon이 이미 떠 있으면 그렇다고 알려 주기만 합니다.
+
+```bash
+ros2 daemon start
+```
+
+매번 입력하기 번거로우면 `~/.bashrc`의 `RMW_IMPLEMENTATION` 줄 아래에 다음 한 줄을 추가합니다. 터미널을 열 때마다 1초 정도 더 걸리지만, daemon이 항상 떠 있게 됩니다. daemon은 띄울 때의 환경 변수로 RMW를 고르므로, 반드시 `RMW_IMPLEMENTATION` 설정보다 아래에 두어야 합니다.
+
+```bash
+ros2 daemon start > /dev/null 2>&1
+```
+
+알아 둘 점은 다음과 같습니다.
+
+- daemon을 다시 띄워야 할 때(RMW를 바꾼 뒤, CLI 결과가 실제 상태와 다르게 보일 때)는 `ros2 daemon stop` 직후에 `ros2 daemon start`를 실행합니다. `stop`은 daemon이 떠 있을 때만 바로 끝납니다.
+- `ros2 daemon status`는 쓰지 않습니다. daemon이 없을 때 "없다"고 알려 주는 대신 2분 넘게 멈춥니다.
+- 이미 멈춘 명령은 Ctrl+C로 끊고 `ros2 daemon start`를 실행한 뒤 다시 입력합니다.
+- `ros2 topic list --no-daemon`처럼 `--no-daemon`을 붙이면 daemon을 거치지 않고 그 명령이 직접 탐색합니다. 조금 느리지만 daemon 상태와 상관없이 동작합니다.
 
 ### 그래픽과 시뮬레이션 문제 해결
 
@@ -103,7 +130,7 @@ ros2 doctor --report | grep -i middleware
 | 8 | Teleop-bot | [ch08_teleop_bot.md](ch08_teleop_bot.md) | 131~154 |
 | 9 | 지도 만들기 | [ch09_building_maps.md](ch09_building_maps.md) | 155~170 |
 | 10 | 지도 안에서 이동하기 | [ch10_navigation.md](ch10_navigation.md) | 171~184 |
-| 11 | Chess-bot | [ch11_chess_bot.md](ch11_chess_bot.md) | 185~210 |
+| 11 | Chess-bot | [ch11_chess_bot.md](ch11_chess_bot.md) | 185~209 |
 | 12 | Follow-bot | [ch12_follow_bot.md](ch12_follow_bot.md) | 213~228 |
 | 13 | 순찰하기 | [ch13_on_patrol.md](ch13_on_patrol.md) | 229~244 |
 | 14 | Stockroom-bot | [ch14_stockroom_bot.md](ch14_stockroom_bot.md) | 245~276 |
