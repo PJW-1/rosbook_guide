@@ -552,7 +552,7 @@ ros2 action send_goal /gripper_cmd control_msgs/action/GripperCommand "{command:
 
 ### 실습 14-6. 지휘 노드와 launch 파일
 
-**준비**: 먼저 가짜 서버들로 흐름을 시험하고(14-6), 그다음 실제 시뮬과 Nav2로 돌립니다(14-7).
+**준비**: 먼저 가짜 서버들로 흐름을 시험하고(14-6), 그다음 실제 시뮬과 Nav2로 돌립니다(14-7). 앞 실습에서 켜 둔 것은 모두 Ctrl+C로 끕니다. 14-3의 시뮬과 Nav2, 14-4의 `marker_finder`, 14-5의 `fake_gripper`가 여기에 해당합니다. `fetch.launch.py`가 `marker_finder`와 `fake_gripper`를 직접 띄우고, 이 실습의 `fake_nav`는 Nav2와 이름이 같은 `/navigate_to_pose` 서버이기 때문입니다. 이름이 같은 액션 서버가 두 개 있으면 목표 요청이 양쪽에 모두 전달되므로, 어느 쪽 결과를 받게 될지 알 수 없습니다.
 
 **직접 입력**:
 
@@ -639,6 +639,8 @@ class FetchItem(Node):
             if time.monotonic() - self.error_time < 0.5:
                 cmd.twist.angular.z = -self.get_parameter('kp').value * self.error
                 good = good + 1 if abs(self.error) < 0.05 else 0
+            else:
+                good = 0
             self.cmd_pub.publish(cmd)
             if good >= 5:
                 break
@@ -696,7 +698,7 @@ if __name__ == '__main__':
 | `wait(self, future)` | 다른 스레드의 executor가 콜백을 처리하는 동안, 메인 스레드는 future가 끝나기를 짧게 자면서 기다립니다. |
 | `wait_for_server(timeout_sec=10.0)` | 서버가 없으면 10초 뒤 포기하고 실패로 처리합니다. 시간 제한이 없으면 영원히 멈춥니다. |
 | `navigate`, `grip` | 각 액션의 목표 메시지를 채워 `run_action`에 넘깁니다. |
-| `align` | 오차에 비례해 제자리 회전합니다. 오차가 0.05 미만인 상태가 5번(약 0.5초) 연속되면 정렬 완료입니다. 끝나면 정지 명령을 한 번 보냅니다. |
+| `align` | 오차에 비례해 제자리 회전합니다. 오차가 0.05 미만인 상태가 5번(약 0.5초) 연속되면 정렬 완료입니다. 표시 소식이 0.5초 넘게 끊기면 `else` 쪽으로 가서 회전 명령은 0이 되고, 연속 횟수도 0부터 다시 셉니다. 끝나면 정지 명령을 한 번 보냅니다. |
 | `time.monotonic()` | 정렬 시간 제한과 표시 신선도는 벽시계 기준입니다. 시뮬 시간이 멈춰 있어도 무한히 기다리지 않습니다. |
 | `steps = [...]` | 임무를 이름 붙은 단계 목록으로 적습니다. 하나라도 실패하면 거기서 멈추고 단계 이름을 로그로 남깁니다. |
 | `SingleThreadedExecutor`와 `threading.Thread` | `run()`이 메인 스레드에서 순서대로 기다리는 동안, 별도 스레드가 노드를 spin해서 액션 응답과 `marker/error`를 받습니다. 13장 `patrol_fsm`과 같은 구조입니다. |
@@ -740,7 +742,12 @@ cd ~/rosbook_ws && colcon build --symlink-install --packages-select stockroom_bo
 source ~/rosbook_ws/install/setup.bash
 ```
 
-시뮬 없이 흐름 시험하기: 터미널 1에서 13장의 가짜 내비게이션 서버를 0.5초짜리로 띄웁니다.
+시뮬 없이 흐름 시험하기: 먼저 남아 있는 액션 서버가 없는지 확인합니다. `/navigate_to_pose`나 `/gripper_cmd`가 보이면 그것을 띄운 터미널을 찾아 끕니다.
+```bash
+ros2 action list
+```
+
+터미널 1에서 13장의 가짜 내비게이션 서버를 0.5초짜리로 띄웁니다.
 ```bash
 ros2 run patrol fake_nav --ros-args -p duration:=0.5
 ```
@@ -782,7 +789,7 @@ ros2 action list -t
 
 ### 실습 14-7. 시뮬과 Nav2로 전체 실행하기
 
-**준비**: 터미널 4개. `fake_nav`가 켜져 있으면 끕니다.
+**준비**: 터미널 4개. 14-6에서 켠 `fake_nav`와 `fetch.launch.py`를 Ctrl+C로 끕니다. `fetch_item`은 임무가 끝나면 스스로 종료되지만, 같은 launch의 `marker_finder`와 `fake_gripper`는 계속 남아 있습니다. `ros2 action list`에 `/navigate_to_pose`와 `/gripper_cmd`가 보이지 않아야 합니다. 시뮬과 Nav2는 아래에서 새로 띄웁니다.
 
 **직접 입력**:
 
