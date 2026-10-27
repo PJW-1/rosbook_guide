@@ -295,21 +295,24 @@ class SonarStreamDriver(Node):
         self.frame_id = self.get_parameter('frame_id').value
         self.lock = threading.Lock()
         self.latest_mm = None
+        self.latest_stamp = None
         self.pub = self.create_publisher(Range, 'range', 10)
         self.timer = self.create_timer(0.1, self.on_timer)
         self.sonar = FakeSonar()
         self.sonar.register_callback(self.on_measurement)
 
     def on_measurement(self, distance_mm):
+        stamp = self.get_clock().now().to_msg()
         with self.lock:
             self.latest_mm = distance_mm
+            self.latest_stamp = stamp
 
     def on_timer(self):
         with self.lock:
             distance_mm = self.latest_mm
+            stamp = self.latest_stamp
         if distance_mm is None:
             return
-        stamp = self.get_clock().now().to_msg()
         self.pub.publish(make_range_msg(distance_mm, self.frame_id, stamp))
 
     def destroy_node(self):
@@ -346,8 +349,9 @@ ros2 run sensors_actuators sonar_stream_driver
 | `from sensors_actuators.sonar_driver import make_range_msg` | 단위 변환을 한 곳에서만 하도록 15-3의 함수를 다시 씁니다. |
 | `self.lock = threading.Lock()` | `on_measurement`는 장치 라이브러리의 스레드에서, `on_timer`는 rclpy 실행기 스레드에서 불립니다. 두 스레드가 같은 변수를 만지므로 lock으로 보호합니다. |
 | `self.latest_mm = None` | 아직 측정값이 없음을 뜻합니다. 첫 값이 오기 전에는 발행하지 않습니다. |
-| `on_measurement` | 저장만 하고 바로 돌아갑니다. 장치 스레드에서 오래 일하지 않는 것이 좋습니다. |
-| `on_timer` | lock 안에서는 값을 복사만 하고, 메시지 만들기와 발행은 lock 밖에서 합니다. |
+| `self.latest_stamp` | 값을 받은 시각입니다. `Range`의 header 시각은 측정 시각이어야 하므로 발행 시각이 아니라 이 값을 씁니다. |
+| `on_measurement` | 받은 시각과 값을 저장만 하고 바로 돌아갑니다. 장치 스레드에서 오래 일하지 않는 것이 좋습니다. |
+| `on_timer` | lock 안에서는 값과 시각을 복사만 하고, 메시지 만들기와 발행은 lock 밖에서 합니다. |
 | `destroy_node` | 노드가 끝날 때 장치 스트림도 멈추도록 부모 메서드를 확장합니다. |
 
 **관찰**:
@@ -357,7 +361,7 @@ ros2 topic hz /range
 ros2 node list
 ```
 
-장치 콜백 간격은 0.05~0.5초로 들쭉날쭉하지만, `/range`는 약 10 Hz로 고르게 나옵니다. 같은 값이 연속으로 두 번 이상 나올 수 있는데, 그 사이에 장치가 새 값을 주지 않았기 때문입니다.
+장치 콜백 간격은 0.05~0.5초로 들쭉날쭉하지만, `/range`는 약 10 Hz로 고르게 나옵니다. 같은 값이 연속으로 두 번 이상 나올 수 있는데, 그 사이에 장치가 새 값을 주지 않았기 때문입니다. 이때 header의 `stamp`도 같게 나오므로, 받는 쪽은 새 측정이 아니라는 것을 알 수 있습니다.
 
 **생각해 볼 질문**: 같은 값이 반복해서 발행되는 것이 문제가 되는 경우와 그렇지 않은 경우를 하나씩 들어 보세요.
 
@@ -382,7 +386,7 @@ def read_cpu_times():
     with open('/proc/stat') as f:
         fields = [int(v) for v in f.readline().split()[1:]]
     idle = fields[3] + fields[4]
-    return idle, sum(fields)
+    return idle, sum(fields[:8])
 
 
 class CpuMonitor(Node):
@@ -443,7 +447,7 @@ ros2 run sensors_actuators cpu_monitor
 
 | 줄 | 설명 |
 |---|---|
-| `read_cpu_times` | `/proc/stat` 첫 줄은 부팅 후 누적된 CPU 시간입니다. 4번째와 5번째 값(idle, iowait)을 쉬는 시간으로 봅니다. |
+| `read_cpu_times` | `/proc/stat` 첫 줄은 부팅 후 누적된 CPU 시간입니다. 4번째와 5번째 값(idle, iowait)을 쉬는 시간으로 봅니다. 전체 시간은 앞의 8개 값만 더합니다. 9번째와 10번째 값(guest, guest_nice)은 이미 user, nice에 들어 있어서 더하면 두 번 셉니다. |
 | `d_idle`, `d_total` | 누적값이므로 이전 값과의 차이로 1초 동안의 사용률을 구합니다. |
 | `DiagnosticStatus.WARN`, `OK` | 상태 수준 상수입니다. 받는 쪽은 숫자를 해석하지 않고 수준만 보고 경고를 띄울 수 있습니다. |
 | `KeyValue(...)` | 수치 같은 세부 정보는 문자열 키-값 목록으로 붙입니다. |

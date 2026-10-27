@@ -725,7 +725,11 @@ gz topic -l
 ros2 topic pub -r 10 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.2}}"
 ```
 
-Ctrl+C로 멈춘 뒤 키보드로 운전합니다.
+Ctrl+C로 발행을 멈춰도 로봇은 서지 않을 수 있습니다. Gazebo의 DiffDrive 플러그인은 마지막으로 받은 속도를 계속 쓰기 때문입니다. 정지 명령을 한 번 보낸 뒤 키보드로 운전합니다.
+
+```bash
+ros2 topic pub --once /cmd_vel geometry_msgs/msg/Twist "{}"
+```
 
 ```bash
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p use_sim_time:=true
@@ -737,6 +741,7 @@ ros2 topic echo /odom --field pose.pose.position
 | 줄 | 설명 |
 |---|---|
 | `ros2 topic pub -r 10 ... Twist` | 0.2 m/s 전진 명령을 초당 10번 보냅니다. |
+| `ros2 topic pub --once ... "{}"` | 모든 필드가 0인 `Twist`를 한 번 보냅니다. 이것이 정지 명령입니다. |
 | `teleop_twist_keyboard` | 기본값(`stamped` 파라미터 `false`)으로 `Twist`를 냅니다. 이 로봇의 브리지 타입과 맞습니다. |
 
 **관찰**:
