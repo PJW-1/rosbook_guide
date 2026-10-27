@@ -160,15 +160,19 @@ class SpeechServer(Node):
             self, Talk, 'speak',
             execute_callback=self.execute,
             goal_callback=self.on_goal,
+            handle_accepted_callback=self.on_accepted,
             cancel_callback=self.on_cancel)
 
     def on_goal(self, goal_request):
-        with self.count_lock:
-            if self.active > 0 and not self.get_parameter('preempt').value:
-                self.get_logger().warning('busy: rejecting new sentence')
-                return GoalResponse.REJECT
-            self.active += 1
+        if self.active > 0 and not self.get_parameter('preempt').value:
+            self.get_logger().warning('busy: rejecting new sentence')
+            return GoalResponse.REJECT
         return GoalResponse.ACCEPT
+
+    def on_accepted(self, goal_handle):
+        with self.count_lock:
+            self.active += 1
+        goal_handle.execute()
 
     def on_cancel(self, goal_handle):
         return CancelResponse.ACCEPT
@@ -256,13 +260,14 @@ if __name__ == '__main__':
 | `voice`, `preempt`, `wav_dir` | 목소리 이름, 새 문장이 오면 지금 문장을 끊을지 여부, wav 파일 저장 폴더(빈 문자열이면 스피커로 출력)입니다. |
 | `shutil.which('espeak-ng')` | PATH에서 프로그램을 찾습니다. 없으면 노드는 뜨지만 오류 로그를 남기고, 목표가 오면 중단(abort)으로 응답합니다. |
 | `threading.Lock()` 두 개 | `speak_lock` 은 한 번에 한 문장만 말하게 하는 잠금입니다. `count_lock` 은 여러 스레드가 `self.active` 를 동시에 고치지 못하게 막는 잠금입니다. |
-| `self.active` | 받아들였지만 아직 끝나지 않은 목표의 수입니다. `on_goal` 에서 늘리고, 실행 콜백이 끝날 때 줄입니다. |
+| `self.active` | 받아들였지만 아직 끝나지 않은 목표의 수입니다. `on_accepted` 에서 늘리고, 실행 콜백이 끝날 때 줄입니다. |
 | `self.turn` | 실행 콜백이 시작될 때마다 1씩 늘어나는 번호입니다. 내 번호와 현재 번호가 다르면 더 새로운 문장이 들어왔다는 뜻입니다. |
 | `ActionServer(self, Talk, 'speak', ...)` | 이름이 `speak` 인 액션 서버를 만듭니다. 원서와 같은 이름입니다. |
-| `on_goal` | 목표를 받을지 정합니다. 끝나지 않은 목표가 있고 `preempt` 가 거짓이면 `REJECT` 로 거절합니다. 목표를 받아들이는 일(`on_goal`)과 실행하는 일(`execute`)은 서로 다른 콜백이어서, 받아들인 뒤 실행 콜백이 `speak_lock` 을 잡기까지 짧은 틈이 있습니다. 그래서 `speak_lock.locked()` 로 바쁜지 판단하면 그 틈에 들어온 두 번째 목표도 받아들여집니다. 이 코드는 확인과 증가를 `count_lock` 안에서 한 번에 처리해서 그 틈을 없앱니다. |
+| `on_goal` | 목표를 받을지 정합니다. 끝나지 않은 목표가 있고 `preempt` 가 거짓이면 `REJECT` 로 거절합니다. |
+| `on_accepted` | 수락 응답을 보낸 뒤 rclpy가 부르는 콜백입니다(`handle_accepted_callback`). 끝나지 않은 목표 수를 늘리고, `goal_handle.execute()` 로 실행 콜백을 예약합니다. 이 콜백을 지정하지 않으면 rclpy의 기본 콜백이 `goal_handle.execute()` 만 부릅니다. 왜 여기서 세는지는 표 아래에 적었습니다. |
 | `on_cancel` | 취소 요청을 모두 받아들입니다. 실제로 멈추는 일은 실행 콜백이 합니다. |
 | `make_command` | `espeak-ng -a 음량 -s 속도 -v 목소리 [-w 파일] 문장` 형태의 명령 목록을 만듭니다. `-a` 는 0~200 범위라서 volume에 100을 곱합니다. 파라미터는 목표가 올 때마다 다시 읽으므로 실행 중에 `ros2 param set` 으로 바꾼 값이 다음 문장부터 반영됩니다. |
-| `execute` 의 `try`/`finally` | 실제 일은 `speak` 에 맡기고, 어떻게 끝나든(성공, 취소, 중단, 예외) 마지막에 `self.active` 를 1 줄입니다. 줄이지 못하면 서버는 계속 바쁜 상태로 남아 이후의 목표를 모두 거절합니다. |
+| `execute` 의 `try`/`finally` | 실제 일은 `speak` 에 맡기고, 어떻게 끝나든(성공, 취소, 중단, 예외) 마지막에 `self.active` 를 1 줄입니다. 줄이지 못하면 `self.active` 가 0으로 돌아오지 않으므로, `preempt` 가 거짓일 때 이후의 목표를 모두 거절합니다. |
 | `self.turn += 1` | 이 목표의 번호를 받습니다. |
 | `with self.speak_lock:` | 앞 문장이 끝날 때까지 기다렸다가 잠금을 잡습니다. |
 | `subprocess.Popen(...)` | espeak-ng를 실행하고 바로 돌아옵니다. 끝날 때까지 기다리지 않으므로 그동안 취소를 확인할 수 있습니다. |
@@ -273,6 +278,12 @@ if __name__ == '__main__':
 | `goal_handle.succeed()` | 프로그램이 정상 종료(코드 0)하면 성공으로 끝냅니다. |
 | `return Talk.Result()` | 비어 있는 결과를 돌려줍니다. 상태 값은 위에서 정한 것이 전달됩니다. |
 | `MultiThreadedExecutor()` | 콜백을 여러 스레드에서 실행하는 executor(콜백을 꺼내 실행하는 실행기)입니다. 실행 콜백 하나가 말하는 동안 스레드를 붙잡고 있어도, 다른 스레드가 새 목표 요청과 취소 요청을 처리합니다. rclpy 액션 서버는 실행 콜백을 따로 예약해서 돌리므로, 이 서버에서는 콜백 그룹을 따로 지정하지 않아도 끼어들기와 취소가 동작했습니다(7절). |
+
+**목표 하나가 거치는 세 단계**: rclpy 액션 서버는 목표 요청 하나를 `on_goal`(받을지 결정), 수락 응답 전송, `on_accepted`(수락 뒤 처리) 순서로 처리합니다. 실행 콜백은 그다음에 따로 예약되어 다른 스레드에서 시작됩니다. 액션 서버는 노드의 기본 콜백 그룹, 즉 한 번에 콜백 하나만 실행하는 그룹에 속합니다. 그래서 앞의 세 단계가 끝나기 전에는 다음 목표 요청의 `on_goal` 이 시작되지 않습니다. 반면 예약된 실행 콜백이 언제 시작될지는 정해져 있지 않습니다.
+
+- 바쁜지를 `speak_lock.locked()` 로 판단하면, 실행 콜백이 잠금을 잡기 전에 들어온 두 번째 목표가 받아들여질 수 있습니다. `preempt` 가 거짓인데도 두 문장이 모두 수락되고, 나중 문장이 앞 문장을 끊게 됩니다.
+- `on_goal` 에서 바로 수를 늘리면 다른 문제가 생깁니다. `on_goal` 이 수락한 뒤에도 응답을 보내지 못하면(그사이 클라이언트가 종료된 경우 등) rclpy는 `on_accepted` 와 실행 콜백을 부르지 않습니다. 그러면 수를 줄일 곳이 없어 서버가 계속 바쁜 상태로 남습니다.
+- `on_accepted` 에서 늘리면 두 문제가 모두 사라집니다. 다음 목표의 `on_goal` 은 항상 늘어난 값을 보고, 여기까지 온 목표는 실행 콜백이 반드시 예약되므로 `finally` 에서 수가 줄어듭니다.
 
 **생각해 볼 질문**: `MultiThreadedExecutor` 대신 `rclpy.spin(node)` (단일 스레드)를 쓰면 말하는 도중에 들어온 취소 요청은 어떻게 될까요?
 
@@ -529,7 +540,7 @@ ros2 action send_goal /speak basics_interfaces/action/Talk "{sentence: 'a very l
   - `ros2 action send_goal` 도중 SIGINT로 취소했을 때 서버의 `canceled by client` 로그와 `Executor is already spinning` 메시지.
   - 콜백 그룹을 지정하지 않고 `MultiThreadedExecutor` 만으로 끼어들기와 취소가 동작하는 것, `SingleThreadedExecutor` 로 바꾸면 둘 다 동작하지 않는 것.
   - 4절의 `-p volume:=1`, 액션 이름 리매핑, 실행 중 잘못된 타입 설정의 출력.
-  - (2026-10-28 수정) 목표를 받아들인 뒤 실행 콜백이 `speak_lock` 을 잡기 전의 틈. 수정 전 코드는 실행 콜백 없이 `on_goal` 을 두 번 부르면 두 번 모두 ACCEPT를 돌려주었고, 수정 후 코드는 두 번째에 REJECT를 돌려주었습니다. 클라이언트에서 목표 두 개를 연달아 보낸 시험에서는 수정 전 코드도 5번 모두 두 번째 목표를 거절했습니다. 그러니 이 틈은 드물게만 열립니다. 수정 후에 다시 확인한 것은 다음과 같습니다. `preempt` 가 거짓일 때 두 번째 목표 거절(3번), 취소 뒤 새 목표 SUCCEEDED, `preempt` 가 참일 때 첫 목표 ABORTED와 두 번째 목표 SUCCEEDED(3번), `colcon test`(3개 중 통과 2, 건너뜀 1).
+  - (2026-10-28 수정) 3절의 "목표 하나가 거치는 세 단계". executor 없이 콜백을 직접 부르는 시험 두 가지로 확인했습니다. 첫째는 목표 A를 실행에 넘겼지만 실행 콜백이 아직 시작되지 않았을 때 목표 B가 오는 경우입니다. `speak_lock.locked()` 로 판단하는 코드는 B를 받아들였고, 지금 코드는 거절했습니다. 둘째는 A가 `on_goal` 을 통과했지만 `on_accepted` 가 불리지 않는 경우입니다. `on_goal` 에서 바로 수를 늘리는 코드는 B를 거절했고(계속 바쁜 상태), 지금 코드는 받아들였습니다. 이 동작의 근거인 rclpy의 처리 순서와 콜백 그룹은 설치된 rclpy 소스(`rclpy/action/server.py`, `rclpy/executors.py`)를 읽어 확인했습니다. 클라이언트에서 목표 두 개를 연달아 보낸 시험에서는 `speak_lock.locked()` 코드도 5번 모두 B를 거절했습니다. 실제로 첫째 경우가 얼마나 자주 생기는지는 확인하지 못했습니다. 지금 코드로 다시 확인한 것은 다음과 같습니다. `preempt` 가 거짓일 때 두 번째 목표 거절(3번), 취소 뒤 새 목표 SUCCEEDED, `preempt` 가 참일 때 첫 목표 ABORTED와 두 번째 목표 SUCCEEDED(3번), `colcon test`(3개 중 통과 2, 건너뜀 1).
 - 확인 못 함:
   - 실제 espeak-ng 동작. 검증 환경에는 espeak-ng가 설치되어 있지 않아(설치 금지), 받은 인자를 기록하고 문장 길이에 비례해 기다린 뒤 빈 wav를 쓰는 가짜 `espeak-ng` 스크립트로 노드 구조만 시험했습니다. 실제 음성의 음량, 속도, 목소리 옵션(`-a`, `-s`, `-v`)의 효과와 기본 속도 175는 확인하지 않았습니다. 패키지 이름과 버전은 `apt-cache policy espeak-ng` 로 확인했습니다(1.51+dfsg-12build1, 미설치).
   - 소리 출력. 검증 중에는 소리를 재생하지 않았습니다. `paplay`(`pulseaudio-utils`)와 WSLg 오디오는 학습자가 직접 확인해야 합니다. `PULSE_SERVER=unix:/mnt/wslg/PulseServer` 환경 변수가 설정된 것만 확인했습니다.
