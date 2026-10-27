@@ -102,7 +102,7 @@
 `basics_interfaces`의 기본 형태는 다음과 같습니다. 3장에서 만들고 4장과 5장에서 확장합니다.
 
 - 생성 명령: `ros2 pkg create --build-type ament_cmake --license Apache-2.0 basics_interfaces`
-- `package.xml`: `<buildtool_depend>rosidl_default_generators</buildtool_depend>`, `<exec_depend>rosidl_default_runtime</exec_depend>`, `<member_of_group>rosidl_interface_packages</member_of_group>`를 추가합니다. 5장에서 액션 타입을 추가할 때 `action_msgs` 의존을 따로 넣지 않아도 빌드됩니다(5장 검증 결과).
+- `package.xml`: `<buildtool_depend>rosidl_default_generators</buildtool_depend>`, `<exec_depend>rosidl_default_runtime</exec_depend>`, `<member_of_group>rosidl_interface_packages</member_of_group>`를 추가합니다. 5장의 `Timer.action`은 `builtin_interfaces/Duration`을 쓰므로 `<depend>builtin_interfaces</depend>`, `find_package(builtin_interfaces REQUIRED)`, `DEPENDENCIES builtin_interfaces`를 추가합니다. `action_msgs` 의존은 따로 넣지 않아도 빌드됩니다(5장 검증 결과).
 - `CMakeLists.txt`: `find_package(rosidl_default_generators REQUIRED)`와 `rosidl_generate_interfaces(${PROJECT_NAME} "msg/Complex.msg" ...)`를 씁니다. 4장과 5장은 이 목록에 파일을 한 줄씩 추가합니다.
 
 ## 6. rclpy 코드 기본 형태

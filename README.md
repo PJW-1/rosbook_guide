@@ -91,7 +91,7 @@ ros2 doctor --report | grep -i middleware
 ros2 daemon start
 ```
 
-매번 입력하기 번거로우면 `~/.bashrc`의 `RMW_IMPLEMENTATION` 줄 아래에 다음 한 줄을 추가합니다. 터미널을 열 때마다 1초 정도 더 걸리지만, daemon이 항상 떠 있게 됩니다. daemon은 띄울 때의 환경 변수로 RMW를 고르므로, 반드시 `RMW_IMPLEMENTATION` 설정보다 아래에 두어야 합니다.
+매번 입력하기 번거로우면 `~/.bashrc`의 맨 끝에 다음 한 줄을 추가합니다. 터미널을 열 때마다 1초 정도 더 걸리지만, daemon이 항상 떠 있게 됩니다. 이 줄은 ROS의 `setup.bash`를 source 하는 줄과 `RMW_IMPLEMENTATION` 줄보다 반드시 아래에 있어야 합니다. 그 위에 두면 `ros2` 명령을 아직 찾을 수 없거나, daemon이 Fast DDS로 뜹니다. 출력을 버리는 줄이라 실패해도 아무것도 보이지 않으므로, 추가한 뒤 새 터미널에서 `ros2 topic list`가 바로 끝나는지 한 번 확인합니다.
 
 ```bash
 ros2 daemon start > /dev/null 2>&1

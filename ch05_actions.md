@@ -81,17 +81,34 @@ builtin_interfaces/Duration time_remaining
 
 주석(`#`)은 `ros2 interface show` 출력에도 그대로 나오므로, 각 부분의 역할을 적어 두면 나중에 읽기 좋습니다.
 
-파일: `~/rosbook_ws/src/basics_interfaces/CMakeLists.txt`의 `rosidl_generate_interfaces` 블록에 한 줄을 추가합니다.
+파일: `~/rosbook_ws/src/basics_interfaces/CMakeLists.txt`에서 `find_package(rosidl_default_generators REQUIRED)` 줄 아래에 `find_package` 한 줄을 추가하고, `rosidl_generate_interfaces` 블록에 두 줄을 추가합니다.
 
 ```cmake
+find_package(builtin_interfaces REQUIRED)
+
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Complex.msg"
   "srv/WordCount.srv"
   "action/Timer.action"
+  DEPENDENCIES builtin_interfaces
 )
 ```
 
-`package.xml`은 바꾸지 않습니다. 검증한 빌드에서는 `builtin_interfaces`를 쓰는데도 `DEPENDENCIES` 인자나 추가 `<depend>` 없이 빌드되었습니다. 만약 빌드가 `builtin_interfaces`를 찾지 못한다는 오류로 실패한다면 `package.xml`에 `<depend>builtin_interfaces</depend>`를 넣고, 블록 끝에 `DEPENDENCIES builtin_interfaces`를 추가합니다.
+파일: `~/rosbook_ws/src/basics_interfaces/package.xml`에서 `<buildtool_depend>rosidl_default_generators</buildtool_depend>` 줄 아래에 다음 한 줄을 추가합니다.
+
+```xml
+  <depend>builtin_interfaces</depend>
+```
+
+`Timer.action`은 다른 패키지(`builtin_interfaces`)에 있는 `Duration` 타입을 필드로 씁니다. 다른 패키지의 타입을 쓰면 그 사실을 세 곳에 적습니다.
+
+| 위치 | 역할 |
+|---|---|
+| `package.xml`의 `<depend>` | colcon이 빌드 순서를 정하고, rosdep이 설치할 패키지를 고르는 근거입니다. |
+| `find_package(builtin_interfaces REQUIRED)` | CMake가 그 패키지가 설치된 위치를 찾습니다. |
+| `DEPENDENCIES builtin_interfaces` | 생성되는 코드가 그 패키지의 타입을 참조한다고 알려 줍니다. |
+
+이 PC에서는 세 줄을 넣지 않아도 빌드됩니다. `builtin_interfaces`가 다른 의존성을 거쳐 이미 함께 들어오기 때문입니다. 그래도 직접 쓰는 패키지는 직접 선언해야, 그 간접 경로가 바뀌었을 때 빌드가 깨지지 않습니다.
 
 ```bash
 cd ~/rosbook_ws && colcon build --symlink-install --packages-select basics_interfaces
@@ -422,6 +439,10 @@ class FancyTimerServer(Node):
             time.sleep(1.0)
 
         result.time_elapsed = (self.get_clock().now() - start).to_msg()
+        if goal_handle.is_cancel_requested:
+            goal_handle.canceled()
+            self.get_logger().info('취소 완료')
+            return result
         goal_handle.succeed()
         self.get_logger().info('성공')
         return result
@@ -462,8 +483,9 @@ if __name__ == '__main__':
 | 43~47 | feedback 메시지를 채웁니다. rclpy의 `Duration`끼리는 뺄셈이 지원되지 않아서(`TypeError`), 나노초 정수로 빼서 새 `Duration`을 만듭니다. |
 | 48 | feedback을 보냅니다. 내부적으로는 `/timer/_action/feedback` 토픽에 goal ID와 함께 발행됩니다. |
 | 49~50 | 횟수를 세고 1초 쉽니다. 원서처럼 1초에 한 번 보고하는 구조입니다. |
-| 52~55 | 끝까지 기다렸으면 성공으로 끝냅니다. |
-| 61~64 | `rclpy.spin(node)` 대신 `MultiThreadedExecutor`로 돌립니다. `execute`가 `time.sleep()`으로 한 스레드를 붙잡고 있는 동안 다른 스레드가 취소 요청을 받아 `on_cancel`을 실행해야 하기 때문입니다. |
+| 52~56 | 반복문을 빠져나온 뒤에도 취소 요청을 한 번 더 확인합니다. 마지막 `time.sleep(1.0)` 도중에 취소가 수락되면, 깨어났을 때 이미 시간이 다 되어 반복문이 그대로 끝나기 때문입니다. 이 확인이 없으면 서버는 `succeed()`를 부르고, 액션의 상태 규칙이 CANCELING에서 SUCCEEDED로 가는 것을 허용하므로 클라이언트는 취소를 수락받고도 `SUCCEEDED`를 받습니다. |
+| 57~59 | 끝까지 기다렸고 취소 요청도 없었으면 성공으로 끝냅니다. |
+| 65~68 | `rclpy.spin(node)` 대신 `MultiThreadedExecutor`로 돌립니다. `execute`가 `time.sleep()`으로 한 스레드를 붙잡고 있는 동안 다른 스레드가 취소 요청을 받아 `on_cancel`을 실행해야 하기 때문입니다. |
 
 **왜 스레드가 여러 개 필요한가**: 4장 실습 4-5에서 본 교착과 같은 이유입니다. 스레드가 하나뿐이면 그 스레드는 `execute`의 반복문 안에 있으므로, 취소 요청 메시지를 처리할 스레드가 없습니다. 그러면 `is_cancel_requested`는 끝까지 `False`로 남습니다. 4절에서 직접 확인합니다.
 
@@ -653,6 +675,7 @@ ros2 topic echo --once /timer/_action/status action_msgs/msg/GoalStatusArray
 | 같은 서버에 goal 두 개를 1초 간격으로 보냄 (`fancy_action_client 4`를 두 터미널에서) | 원서의 `SimpleActionServer`처럼 앞 goal이 선점되지 않고, 두 goal 모두 `SUCCEEDED`로 끝납니다. | `ros2 topic echo --once /timer/_action/status action_msgs/msg/GoalStatusArray`에서 goal 두 개의 상태를 봅니다. 한 번에 하나만 받으려면 `ActionServer`의 `goal_callback`과 `handle_accepted_callback`으로 직접 정책을 만들어야 합니다. |
 | 서버를 `--ros-args -p use_sim_time:=true`로 실행 (시뮬레이션 시계를 내보내는 `/clock` 없이) | feedback이 `경과 0.00초, 남음 3.00초`로 계속 반복되고 goal이 끝나지 않습니다. `self.get_clock().now()`가 `/clock`을 받기 전까지 0에 멈춰 있기 때문입니다. | `ros2 topic list`에 `/clock`이 없는 것을 확인합니다. 반대로 Gazebo 같은 시뮬레이터와 함께 쓰는 노드에서 `use_sim_time`을 빠뜨리면 시뮬레이터 시간과 노드 시간이 어긋납니다. |
 | goal 실행 중 서버를 Ctrl+C로 종료 | 검증 환경에서는 서버 터미널에 `feedback publisher is invalid`가 들어 있는 `RCLError` traceback과 `Goal state not set, assuming aborted` 경고가 찍혔습니다. | 클라이언트는 결과를 받지 못하고 기다리게 됩니다. 실제 로봇에서는 서버가 죽었을 때를 대비해 클라이언트에 timeout을 둡니다. |
+| `fancy_action_server.py`에서 반복문 뒤의 취소 확인(53~56줄)을 지우고 `fancy_action_client 3 2.5` 실행 | `취소를 요청합니다`가 찍히고 서버도 `취소 요청 받음`을 남기지만, 결과 상태는 `SUCCEEDED`입니다. 취소는 수락되었어도 서버가 마지막에 `succeed()`를 불렀기 때문입니다. | 서버 로그에 `취소 완료` 대신 `성공`이 찍히는지 봅니다. |
 | `execute`에서 `goal_handle.succeed()` 줄 삭제 | rclpy가 경고를 남기고 상태를 ABORTED로 처리합니다. 위 Ctrl+C 실험에서 본 `Goal state not set, assuming aborted`와 같은 경고입니다. | 서버 로그와 클라이언트의 `[result] 상태:` 줄 |
 
 QoS 불일치는 이 장의 코드로는 만들기 어렵습니다. 액션의 숨겨진 토픽 QoS는 rclpy가 정하고, 서버와 클라이언트가 같은 기본값을 쓰기 때문입니다. 토픽 QoS 불일치는 3장을 참고합니다.
@@ -703,7 +726,8 @@ QoS 불일치는 이 장의 코드로는 만들기 어렵습니다. 액션의 �
 ## 7. 이 문서의 검증 상태
 
 - 확인함 (2026-10-27, WSL2 Ubuntu 24.04, ROS 2 Jazzy, `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`, 별도 검증 워크스페이스와 `ROS_DOMAIN_ID=22`):
-  - `basics_interfaces`에 `Timer.action`을 추가해 `DEPENDENCIES`나 추가 의존 없이 깨끗한 빌드 성공, `ros2 interface show` 출력, `Timer_SendGoal` 등이 `not found`로 나오는 것.
+  - `basics_interfaces`에 `Timer.action`을 추가해 깨끗한 빌드 성공, `ros2 interface show` 출력, `Timer_SendGoal` 등이 `not found`로 나오는 것. `builtin_interfaces` 의존 세 줄은 넣은 빌드와 넣지 않은 빌드 모두 성공했습니다.
+  - 반복문 뒤 취소 확인을 넣은 `fancy_action_server`에서 3초 goal을 2.5초에 취소하면 `CANCELED`(걸린 시간 3.001초)로 끝나는 것. 취소를 수락한 뒤 `succeed()`를 부르면 클라이언트가 `SUCCEEDED`를 받는 것은 `example_interfaces/action/Fibonacci`로 만든 같은 구조의 서버로 확인했습니다.
   - 이 문서의 서버 2개, 클라이언트 2개를 코드 그대로 빌드, 실행해서 3절의 출력을 얻었습니다. 타임스탬프만 `...`로 줄였습니다.
   - `ros2 action list/info/type/send_goal`(`--feedback` 포함), `ros2 node info`, `--include-hidden-topics`, `--include-hidden-services`, 숨겨진 토픽 두 개의 `topic info -v` QoS, `topic echo` 출력.
   - 성공, 2.5초 뒤 취소, abort 세 경우의 결과 상태와 시간, feedback 횟수.
