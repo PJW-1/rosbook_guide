@@ -8,16 +8,41 @@
 
 내비게이션은 노드 하나가 아니라 lifecycle 노드 여러 개가 토픽, tf, 액션으로 이어진 묶음입니다. 사용자(rviz2 또는 내 코드)는 `navigate_to_pose` 액션 하나에 목표를 보내고, 그 뒤의 일은 각 노드가 나눠 맡습니다.
 
+상자가 많아 두 그림으로 나눕니다. 첫 그림은 위치 추정 쪽입니다.
+
+```mermaid
+flowchart LR
+  ms("map_server") --> map["/map"]
+  map --> amcl("amcl")
+  bridge("ros_gz_bridge") --> scan["/scan"]
+  scan --> amcl
+  bridge -->|"odom → base_footprint"| tf["/tf"]
+  tf --> amcl
+  rviz("rviz2") -->|"2D Pose Estimate"| initialpose["/initialpose"]
+  initialpose --> amcl
+  amcl -->|"map → odom"| tf
+  amcl --> amcl_pose["/amcl_pose"]
+  amcl --> particle["/particle_cloud"]
 ```
-map_server ── /map ──▶ amcl ◀── /scan, /tf(odom → base_footprint)
-                        │  ◀── /initialpose (rviz2 "2D Pose Estimate")
-                        ├── /tf  map → odom
-                        ├── /amcl_pose, /particle_cloud
-내 코드 / rviz2 ── navigate_to_pose (액션) ──▶ bt_navigator
-          bt_navigator ──▶ planner_server (경로, /plan) ──▶ controller_server
-controller_server ── /cmd_vel_nav ──▶ velocity_smoother ── /cmd_vel_smoothed
-   ──▶ collision_monitor ── /cmd_vel (TwistStamped) ──▶ ros_gz_bridge ──▶ Gazebo
+
+두 번째 그림은 경로 계획과 제어 쪽입니다.
+
+```mermaid
+flowchart LR
+  client("내 코드 또는 rviz2") -->|"NavigateToPose 목표"| ntp[/"/navigate_to_pose 액션"/]
+  ntp --> bt("bt_navigator")
+  bt -.->|"ComputePathToPose"| planner("planner_server")
+  planner --> plan["/plan"]
+  bt -.->|"FollowPath"| ctrl("controller_server")
+  ctrl --> cvn["/cmd_vel_nav"]
+  cvn --> vs("velocity_smoother")
+  vs --> cvs["/cmd_vel_smoothed"]
+  cvs --> cm("collision_monitor")
+  cm -->|"TwistStamped"| cv["/cmd_vel"]
+  cv --> gzb("ros_gz_bridge")
 ```
+
+그림에서 볼 것: 두 그림은 tf로만 이어집니다. amcl이 낸 `map → odom`을 planner_server와 controller_server가 tf로 읽고, 목표를 보내는 쪽은 `/navigate_to_pose` 액션 하나만 압니다.
 
 ## 1. 목표와 개념
 
@@ -29,7 +54,37 @@ controller_server ── /cmd_vel_nav ──▶ velocity_smoother ── /cmd_ve
 
 비유: 눈을 가리고 아는 건물에 들어간 사람이 손으로 벽을 더듬으며 "이 모양의 모서리는 2층 계단 옆뿐이야"라고 후보를 줄여 가는 것과 비슷합니다.
 
+예:
+
+```bash
+ros2 topic pub --once /initialpose geometry_msgs/msg/PoseWithCovarianceStamped "{header: {frame_id: map}, pose: {pose: {position: {x: 0.0, y: 0.0}, orientation: {w: 1.0}}}}"
+```
+
+실습 10-3의 명령입니다. rviz2의 2D Pose Estimate도 같은 토픽에 같은 타입을 발행합니다. `waffle_pi.yaml`의 amcl 설정이 `set_initial_pose: false`라서, 이 메시지가 오기 전까지 amcl은 `map → odom`을 내지 않습니다.
+
 **costmap**: 경로를 계산하려면 지도의 0/100/-1 값만으로는 부족합니다. 로봇은 크기가 있으므로 벽 근처를 "들어가면 위험한 곳"으로 부풀려야 하고, 지도에 없는 새 장애물(사람, 상자)은 레이저로 바로 반영해야 합니다. 이를 담은 격자가 costmap이고, 전체 지도 크기의 global costmap(경로 계획용)과 로봇 주변만 보는 local costmap(제어용) 두 개가 있습니다.
+
+```mermaid
+flowchart LR
+  map["/map"] --> gc("global_costmap<br/>map 프레임, 지도 전체")
+  scan["/scan"] --> gc
+  scan --> lc("local_costmap<br/>odom 프레임, 로봇 주변 3 m × 3 m")
+  gc -.->|"경로 계산에 사용"| planner("planner_server")
+  lc -.->|"속도 계산에 사용"| ctrl("controller_server")
+```
+
+그림에서 볼 것: `/map`은 global costmap에만 들어갑니다. local costmap은 레이저만으로 채우고 로봇을 따라 움직이므로, 지도에 없는 상자도 바로 반영합니다. 두 costmap은 각각 planner_server와 controller_server 안에서 돕니다.
+
+예:
+
+```yaml
+      global_frame: map      # global_costmap
+      plugins: ["static_layer", "obstacle_layer", "voxel_layer", "inflation_layer"]
+      global_frame: odom     # local_costmap
+      plugins: ["obstacle_layer", "voxel_layer", "inflation_layer"]
+```
+
+`/opt/ros/jazzy/share/turtlebot3_navigation2/param/waffle_pi.yaml`의 두 costmap 부분에서 두 줄씩 가져왔습니다. 지도 파일을 읽는 `static_layer`가 local costmap에는 없고, 장애물 주변을 위험 구역으로 부풀리는 `inflation_layer`는 둘 다 있습니다.
 
 **Nav2의 역할 분담**:
 - `planner_server`: global costmap 위에서 출발점부터 목표까지 경로를 계산합니다.
@@ -39,7 +94,116 @@ controller_server ── /cmd_vel_nav ──▶ velocity_smoother ── /cmd_ve
 - `velocity_smoother`, `collision_monitor`: 속도 명령을 부드럽게 다듬고, 충돌 직전이면 줄이거나 멈춥니다.
 - `lifecycle_manager_localization`, `lifecycle_manager_navigation`: 9장 실습 9-6처럼 위 노드들에 configure와 activate를 순서대로 보냅니다.
 
+목표 하나가 처리되는 순서는 다음과 같습니다.
+
+```mermaid
+sequenceDiagram
+  participant c as patrol 노드
+  participant bt as bt_navigator
+  participant pl as planner_server
+  participant ct as controller_server
+  participant vs as velocity_smoother
+  participant cm as collision_monitor
+  c->>bt: navigate_to_pose 목표 (PoseStamped)
+  bt-->>c: 수락
+  bt->>pl: ComputePathToPose 목표
+  pl-->>bt: 경로
+  bt->>ct: FollowPath 목표 (경로)
+  loop 도착할 때까지
+    ct->>vs: /cmd_vel_nav
+    vs->>cm: /cmd_vel_smoothed
+    cm->>cm: /scan을 보고 /cmd_vel 발행
+    bt-->>c: 피드백 (distance_remaining)
+  end
+  ct-->>bt: FollowPath 성공
+  bt-->>c: 결과 (error_code)
+```
+
+그림에서 볼 것: 내 코드가 직접 상대하는 것은 bt_navigator 하나입니다. bt_navigator 안쪽도 액션(`ComputePathToPose`, `FollowPath`, 둘 다 `nav2_msgs/action`의 타입)으로 서버들을 부르고, 속도 명령부터는 토픽으로 흐릅니다. 기본 행동 트리는 이동 중에도 경로를 1 Hz로 다시 계산합니다 (13장 실습 13-8).
+
+lifecycle manager가 노드를 깨우는 순서는 다음과 같습니다. 위치 추정 쪽을 예로 듭니다.
+
+```mermaid
+sequenceDiagram
+  participant lm as lifecycle_manager_localization
+  participant ms as map_server
+  participant am as amcl
+  lm->>ms: configure
+  lm->>am: configure
+  lm->>ms: activate
+  lm->>am: activate
+  Note over lm,am: 이후 bond로 노드가 살아 있는지 계속 확인
+```
+
+그림에서 볼 것: 깨우는 순서는 `node_names` 목록의 순서입니다. `nav2_bringup/launch/localization_launch.py`의 목록은 `['map_server', 'amcl']`이고, `navigation_launch.py`의 목록은 `controller_server`, `smoother_server`, `planner_server`, `route_server`, `behavior_server`, `velocity_smoother`, `collision_monitor`, `bt_navigator`, `waypoint_follower`, `docking_server` 순서입니다. bt_navigator가 자신이 부를 서버들보다 뒤에 있어서, `navigate_to_pose`가 열릴 때는 서버들이 이미 준비되어 있습니다.
+
 **액션으로 목표 보내기**: 목적지까지 가는 데는 시간이 걸리고, 그동안 남은 거리를 알려 주고, 중간에 취소할 수 있어야 합니다. 5장에서 배운 액션이 정확히 이 모양입니다. Nav2의 `navigate_to_pose` 액션 타입은 `nav2_msgs/action/NavigateToPose`이고, 목표는 `geometry_msgs/PoseStamped` 하나입니다.
+
+예:
+
+```python
+self.client = ActionClient(self, NavigateToPose, 'navigate_to_pose')
+future = self.client.send_goal_async(goal, feedback_callback=self.on_feedback)
+future.add_done_callback(self.on_goal_response)
+```
+
+실습 10-1의 `patrol.py`에서 가져온 줄입니다. 5장의 액션 클라이언트와 같은 모양이고, 액션 이름과 타입만 Nav2의 것으로 바꿨습니다. 그래서 상대가 가짜 서버(10-1)이든 bt_navigator(10-5)이든 코드는 그대로입니다.
+
+### 코드와 폴더 구조
+
+9장의 `nav_bot` 패키지에 실행 파일 세 개가 더해집니다.
+
+```text
+~/rosbook_ws/src/nav_bot/
+├── package.xml               9장에서 넣은 nav2_msgs, action_msgs, nav2_simple_commander 의존성 그대로
+├── setup.py                  entry_points에 patrol, fake_nav_server, patrol_commander 추가 (10-1)
+└── nav_bot/
+    ├── map_info.py           9장 (9-2)
+    ├── fake_nav_server.py    navigate_to_pose를 흉내 내는 액션 서버 (10-1)
+    ├── patrol.py             waypoints 파라미터를 차례로 보내는 액션 클라이언트 (10-1)
+    └── patrol_commander.py   nav2_simple_commander로 쓴 같은 순찰 (10-6)
+```
+
+- `patrol.py`의 뼈대는 5장의 액션 클라이언트와 같습니다. 앞 장과 달라지는 점은 서버를 기다리는 방법입니다. `wait_for_server()`로 막지 않고 1초 타이머로 `server_is_ready()`를 확인합니다.
+- `patrol_commander.py`는 Node를 상속한 클래스를 만들지 않습니다. `BasicNavigator` 자체가 Node이고, `main()` 안에서 위에서 아래로 흐르는 순차 코드입니다 (10-6의 비교 표).
+
+Nav2는 내가 만든 패키지가 아니라 설치된 launch 파일과 파라미터 파일로 띄웁니다. 실습 10-2의 명령 하나가 다음 순서로 launch 파일을 불러옵니다.
+
+```text
+turtlebot3_navigation2/launch/navigation2.launch.py   map, params_file, use_sim_time 인자, rviz2 실행
+└── nav2_bringup/launch/bringup_launch.py
+    ├── localization_launch.py   map_server, amcl, lifecycle_manager_localization
+    └── navigation_launch.py     planner_server, controller_server, bt_navigator 등과 lifecycle_manager_navigation
+```
+
+이 모든 노드가 파라미터 파일 하나(`turtlebot3_navigation2/param/waffle_pi.yaml`)를 나눠 읽습니다. 파일의 맨 위 키가 노드 이름입니다.
+
+```text
+amcl:                  ros__parameters 아래에 amcl 파라미터
+bt_navigator:          행동 트리 XML 경로, 제공할 액션 목록
+docking_server:
+controller_server:     controller_frequency, 경로 추종 플러그인(DWB)
+local_costmap:
+  local_costmap:       ros__parameters 아래에 local costmap 설정
+global_costmap:
+  global_costmap:      ros__parameters 아래에 global costmap 설정
+map_server:
+map_saver:
+planner_server:        경로 계획 플러그인(NavfnPlanner)
+behavior_server:       spin, backup, wait 같은 복구 동작
+waypoint_follower:
+collision_monitor:
+velocity_smoother:
+```
+
+costmap만 이름이 두 번 겹치는 이유는 costmap 노드가 `local_costmap` 이름공간 안의 `local_costmap` 노드(`/local_costmap/local_costmap`)이기 때문입니다. 원서의 costmap 설정 파일 여러 개가 이 한 파일의 두 부분으로 들어왔습니다.
+
+### 실무 메모
+
+- 설치된 `waffle_pi.yaml`을 직접 고치지 않습니다. `/opt/ros/jazzy` 아래 파일은 apt 업그레이드 때 덮어써집니다. 내 패키지에 복사해서 고치고, `navigation2.launch.py`의 `params_file:=<경로>` 인자로 넘깁니다. 패키지 안의 설정 파일을 `install/`로 보내려면 `setup.py`의 `data_files`에 그 파일을 등록해야 합니다.
+- 내비게이션이 동작하지 않을 때는 아래층부터 봅니다. 먼저 `ros2 lifecycle nodes`와 `ros2 lifecycle get`으로 모두 active인지, 다음으로 `ros2 run tf2_ros tf2_echo map odom --ros-args -p use_sim_time:=true`로 tf 사슬이 이어졌는지, 그다음 `ros2 topic info -v /cmd_vel`로 속도 명령이 누구에게서 누구에게 가는지 확인합니다. 경로 계획 파라미터는 그 뒤에 봅니다.
+- 시뮬에서는 Nav2와 내 노드 모두 `use_sim_time:=True`로 띄웁니다. `navigation2.launch.py`의 기본값은 `false`라서, 빠뜨리면 tf 시각이 맞지 않는 경고가 쏟아집니다 (4절).
+- 목표 좌표는 특정 지도 파일의 `map` 프레임 기준입니다. 웨이포인트를 코드에 박지 않고 파라미터(`patrol.py`의 `waypoints`)나 설정 파일로 빼 두면, 지도를 다시 만들었을 때 코드를 고치지 않아도 됩니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -618,3 +782,4 @@ planner_server가 경로를 찾지 못해 실패를 알리고, bt_navigator는 �
   - Gazebo, rviz2, Nav2 전체 스택을 띄우는 실습 10-2~10-6 전부 (GUI, 그리고 전체 스택 실행은 검증 범위 밖). 특히 Nav2 전체가 `waffle_pi.yaml`로 active까지 가는지(6절 마지막 항목), `ros2 component list` 출력, 초기 위치 뒤 `map → odom` 발행, 파티클 수렴, 실제 주행과 `patrol`의 Nav2 상대 동작, 기본 목표 좌표 (4.0, 1.0)이 빈 공간인지.
   - `patrol_commander`는 빌드와 lint만 통과. 실행은 amcl이 필요해 확인하지 못함.
   - 4절 표 중 `use_sim_time` 누락, 초기 위치 없이 목표 전송, 텔레옵 충돌, controller_server 비활성화, `/amcl_pose` VOLATILE 실험의 실제 출력.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
