@@ -9,10 +9,19 @@
 노드와 토픽의 최종 이름은 코드에 적힌 이름에 네임스페이스와 리매핑을 적용해서 실행할 때 정해집니다.
 패키지는 워크스페이스에서 빌드되어 `install/`에 설치되고, `setup.bash`를 source 해야 ROS 2가 그 패키지를 찾습니다.
 
+```mermaid
+flowchart LR
+  subgraph dom0 ["도메인 0 (ROS_DOMAIN_ID=0)"]
+    talker("/talker 노드") -->|"std_msgs/msg/String"| chatter["/chatter"]
+    chatter --> listener("/listener 노드")
+    daemon("/_ros2cli_daemon_0_16진수<br/>숨은 daemon 노드")
+    talker -.->|"디스커버리 정보"| daemon
+    listener -.->|"디스커버리 정보"| daemon
+  end
+  cli[("터미널의 ros2 명령<br/>ros2 node list 등")] -.->|"127.0.0.1:11511 로 질문"| daemon
 ```
-코드 속 이름 "chatter"  --(네임스페이스 /robot1)-->  /robot1/chatter
-                        --(리매핑 chatter:=hello)-->  /hello
-```
+
+그림에서 볼 것: 메시지(실선)는 talker에서 listener로 곧장 가고 daemon을 거치지 않습니다. daemon은 디스커버리 정보만 받아 두었다가(점선), `ros2` 명령이 DDS가 아닌 localhost 연결로 물어 오면 답합니다. 포트 11511은 도메인 0일 때의 값이고, 도메인 번호만큼 더해집니다.
 
 ## 1. 목표와 개념
 
@@ -20,21 +29,202 @@
 
 **ROS 그래프.** 실행 중인 노드를 점으로, 노드 사이의 메시지 흐름(토픽)을 선으로 그린 그림입니다. 노드 하나는 보통 프로세스 하나라서, 한 노드가 죽어도 나머지는 계속 돕니다. 노드를 같은 입출력의 다른 노드로 바꿔 끼우기도 쉽습니다.
 
+예:
+
+```bash
+ros2 node info /listener
+```
+
+`Subscribers:` 아래의 `/chatter: std_msgs/msg/String`이 그래프에서 listener로 들어오는 선 하나입니다(실습 2-1).
+
 **디스커버리.** ROS 2에는 `roscore`가 없습니다. 각 노드는 시작할 때 DDS 디스커버리로 자기 정보(노드 이름, 발행·구독하는 토픽과 타입, QoS)를 같은 도메인의 참여자들에게 알리고, 다른 참여자의 정보도 받아 둡니다. 이름과 타입과 QoS가 맞는 publisher와 subscriber가 서로를 발견하면 직접 연결합니다. `ROS_DOMAIN_ID`(기본값 0)가 다른 노드끼리는 서로를 발견하지 않습니다. `ROS_AUTOMATIC_DISCOVERY_RANGE`는 디스커버리 범위를 같은 컴퓨터(`LOCALHOST`)나 같은 네트워크(`SUBNET`) 등으로 정합니다.
+
+예:
+
+```bash
+ROS_DOMAIN_ID=5 ros2 run demo_nodes_py listener
+```
+
+이 listener는 도메인 0의 talker를 발견하지 못하므로 아무것도 받지 못합니다(실습 2-2). 환경 변수 하나로 그래프가 둘로 나뉩니다.
+
+**CLI.** CLI(Command Line Interface, 명령줄 인터페이스)는 창과 버튼 대신 터미널에 명령을 글자로 입력해서 프로그램을 다루는 방식입니다. Claude Code나 Codex를 터미널에서 쓰는 것도 같은 방식입니다. ROS 2의 CLI는 `ros2`라는 명령 하나로 시작하고, 그 뒤에 무엇을 다룰지 고르는 하위 명령(`node`, `topic`, `service`, `pkg`, `launch`, `daemon` 등)과 무엇을 할지 고르는 동사(`list`, `info`, `echo` 등)를 붙입니다. 그래프를 그림으로 보는 GUI 도구도 있습니다. `rqt_graph`는 노드와 토픽의 연결을, `rviz2`는 좌표계와 센서 데이터를 3차원으로 보여 줍니다.
+
+예:
+
+```bash
+ros2 node list -a
+ros2 topic info -v /tf_static
+```
+
+`ros2` 다음의 `node`, `topic`이 하위 명령이고, `list`, `info`가 동사이고, `-a`, `-v`는 옵션입니다. `ros2 topic -h`처럼 `-h`를 붙이면 그 단계에서 쓸 수 있는 동사와 옵션을 보여 줍니다.
 
 **ros2 daemon.** `ros2 node list` 같은 CLI 명령은 실행될 때마다 새로 디스커버리를 하면 그래프 정보가 다 모일 때까지 기다려야 합니다. 그래서 CLI는 처음 실행될 때 daemon이라는 백그라운드 노드를 띄워 두고, 그 노드가 모아 둔 그래프 정보를 물어봅니다. daemon은 CLI를 위한 캐시일 뿐이고, 노드끼리의 연결에는 끼어들지 않습니다. daemon을 꺼도 talker와 listener는 계속 통신합니다. 이 점이 `roscore`와 다릅니다.
 
-**RMW.** ROS 2 노드는 DDS를 직접 부르지 않고 RMW(ROS MiddleWare) 인터페이스를 거칩니다. RMW 구현체(`rmw_fastrtps_cpp`, `rmw_cyclonedds_cpp` 등)는 환경 변수 `RMW_IMPLEMENTATION`으로 고르고, 노드 코드는 바꾸지 않습니다. 이 가이드의 환경은 Cyclone DDS(`rmw_cyclonedds_cpp`)를 씁니다. 이 PC에서는 Jazzy 기본값인 Fast DDS로 프로세스 사이에 데이터가 전달되지 않는 문제가 있어서 바꿨고, 자세한 이유는 README에 있습니다. 이 사례 자체가 "통신 계층만 바꾸고 노드 코드는 그대로 쓴다"는 RMW 설계의 예입니다.
+daemon은 `127.0.0.1`의 TCP 포트 `11511 + ROS_DOMAIN_ID`에서 XML-RPC라는 방식으로 질문을 받습니다. 도메인마다 포트가 다르므로 daemon도 도메인마다 따로 뜹니다. daemon 자신도 ROS 2 노드라서 그래프에 `/_ros2cli_daemon_0_<16진수>`라는 이름으로 나타납니다. 앞의 `_ros2cli`는 CLI가 만드는 노드의 공통 접두사이고, `0`은 도메인 번호, 끝의 16진수는 띄울 때마다 새로 만드는 고유 번호입니다. 이름의 어느 부분이든 `_`로 시작하면 숨은 노드로 취급되어, `ros2 node list`는 `-a` 없이는 이 노드를 보여 주지 않습니다. 또 daemon은 질문을 받을 때마다 타이머를 다시 시작하고, 2시간 동안 질문이 하나도 없으면 스스로 종료합니다.
+
+CLI가 그래프 정보를 얻는 경로는 두 가지입니다. daemon이 떠 있으면 daemon에게 묻고, 연결이 안 되면 직접 노드로 넘어갑니다. daemon이 없으면 daemon을 새로 띄워 두고, 이번 명령은 직접 노드로 처리합니다. `--no-daemon`을 붙이면 처음부터 직접 노드만 씁니다.
+
+```mermaid
+sequenceDiagram
+  participant cli as ros2 node list
+  participant d as daemon 노드
+  participant dn as 직접 노드 _ros2cli_PID
+  participant g as 도메인의 다른 노드들
+  alt daemon이 떠 있을 때
+    cli->>d: 127.0.0.1:11511 로 노드 목록 질문
+    d-->>cli: 미리 모아 둔 목록
+  else daemon을 쓰지 않을 때, --no-daemon
+    cli->>dn: 이번 명령만을 위한 노드 생성
+    g-->>dn: 디스커버리 정보, 기본 0.5초 동안 수집
+    dn-->>cli: 모은 목록
+  end
+```
+
+그림에서 볼 것: 위쪽 경로는 이미 모아 둔 정보를 꺼내므로 빠릅니다. 아래쪽 경로는 명령을 칠 때마다 노드를 새로 만들고 0.5초(`--spin-time`의 기본값) 동안 디스커버리를 기다리므로, 늦게 발견된 노드가 목록에서 빠질 수 있습니다. 직접 노드의 이름은 `_ros2cli_<프로세스 번호>`입니다.
+
+예:
+
+```bash
+ros2 node list --no-daemon
+```
+
+실습 2-2에서 이 명령을 실행하면 같은 목록이 조금 늦게 나옵니다. 모든 명령이 daemon을 쓰는 것은 아닙니다. `ros2 topic pub`은 처음부터 직접 노드로 발행하고, `ros2 topic echo`는 그래프 정보를 물을 때는 daemon을 쓸 수 있지만, 구독은 직접 노드가 만듭니다. 메시지를 실제로 보내거나 받는 일은 daemon이 대신해 주지 않기 때문입니다.
+
+**RMW.** ROS 2 노드는 DDS를 직접 부르지 않고 RMW(ROS MiddleWare) 인터페이스를 거칩니다. RMW 구현체(`rmw_fastrtps_cpp`, `rmw_cyclonedds_cpp` 등)는 환경 변수 `RMW_IMPLEMENTATION`으로 고르고, 노드 코드는 바꾸지 않습니다. 이 가이드의 환경은 Cyclone DDS(`rmw_cyclonedds_cpp`)를 씁니다. 이 PC에서는 Jazzy 기본값인 Fast DDS로 프로세스 사이에 데이터가 전달되지 않는 문제가 있어서 바꿨고, 자세한 이유는 README에 있습니다. 이 사례 자체가 "통신 계층만 바꾸고 노드 코드는 그대로 쓴다"는 RMW 설계의 예입니다. 층으로 보면 노드 코드(rclpy, rclcpp) 아래에 공통 C 라이브러리 rcl이 있고, 그 아래의 rmw 인터페이스가 실제 DDS 구현을 부릅니다. `RMW_IMPLEMENTATION`이 고르는 것은 맨 아래의 DDS 구현뿐입니다. 층 그림은 README의 "왜 Fast DDS 대신 Cyclone DDS를 쓰나요"에 있습니다.
+
+예:
+
+```bash
+RMW_IMPLEMENTATION=rmw_fastrtps_cpp ros2 doctor --report | grep -A2 'RMW MIDDLEWARE'
+```
+
+명령 앞에 환경 변수를 붙이면 그 명령 하나만 다른 RMW로 실행됩니다(실습 2-3). 프로그램은 같고 출력의 `middleware name`만 바뀝니다.
 
 **워크스페이스와 overlay.** 워크스페이스는 직접 만든 패키지를 모아 빌드하는 폴더입니다(`~/rosbook_ws`). `src/`에 소스를 두고 `colcon build`를 실행하면 `build/`, `install/`, `log/`가 생깁니다. `install/setup.bash`를 source 하면 이 워크스페이스가 `/opt/ros/jazzy` 위에 겹쳐집니다. 아래에 깔린 쪽(`/opt/ros/jazzy`)을 underlay, 위에 겹친 쪽(`~/rosbook_ws/install`)을 overlay라고 부릅니다. 같은 이름의 패키지가 양쪽에 있으면 overlay가 이깁니다.
 
 비유: underlay는 공용 도서관이고 overlay는 내 책상 위 책꽂이입니다. 같은 제목의 책이 둘 다 있으면 책상 위의 것을 먼저 집습니다.
 
+```mermaid
+flowchart TB
+  cmd[("ros2 run, ros2 launch, ros2 pkg prefix")]
+  overlay[("overlay<br/>~/rosbook_ws/install<br/>basics")]
+  underlay[("underlay<br/>/opt/ros/jazzy<br/>rclpy, std_msgs, demo_nodes_py")]
+  cmd -.->|"1. 먼저 찾음"| overlay
+  cmd -.->|"2. 없으면 찾음"| underlay
+  overlay -.->|"이 위에 겹쳐짐"| underlay
+```
+
+그림에서 볼 것: 패키지를 찾는 순서는 환경 변수 `AMENT_PREFIX_PATH`에 적힌 경로의 순서입니다. overlay를 나중에 source 하면 이 목록의 앞쪽에 붙으므로 먼저 찾아집니다.
+
+예:
+
+```bash
+echo $AMENT_PREFIX_PATH
+ros2 pkg prefix basics
+```
+
+실습 2-5에서 빌드하고 source 한 뒤에는 첫 줄의 맨 앞에 `.../rosbook_ws/install/basics`가 보이고, 둘째 줄은 그 경로를 출력합니다.
+
 **이름, 네임스페이스, 리매핑.** 노드 이름과 토픽 이름은 파일 경로처럼 `/`로 구분합니다. 코드에 `chatter`처럼 `/` 없이 적은 이름은 상대 이름이라서 노드의 네임스페이스 아래에 붙습니다. 그래서 같은 노드를 네임스페이스만 바꿔 여러 벌 띄우면 이름이 겹치지 않습니다. 리매핑은 코드를 고치지 않고 실행할 때 이름을 바꾸는 기능입니다.
+
+```mermaid
+flowchart LR
+  code["코드 속 이름 chatter"] -->|"네임스페이스 /robot1"| ns["/robot1/chatter"]
+  code -->|"리매핑 chatter:=hello"| remap["/hello"]
+  code -->|"아무것도 주지 않음"| plain["/chatter"]
+```
+
+그림에서 볼 것: 코드에 적힌 이름은 하나인데, 실행할 때 준 인자에 따라 최종 이름이 셋 중 하나가 됩니다. 실행 중인 그래프에는 최종 이름만 보입니다.
+
+예:
+
+```bash
+ros2 run demo_nodes_py talker --ros-args -r __ns:=/robot1
+ros2 run demo_nodes_py talker --ros-args -r chatter:=hello
+```
+
+`--ros-args` 뒤의 `-r`이 이름을 바꾸는 인자입니다. 첫 줄은 노드와 토픽을 `/robot1` 아래로 옮기고, 둘째 줄은 토픽 이름만 바꿉니다(실습 2-6).
 
 **launch 파일.** 노드 여러 개를 이름, 네임스페이스, 리매핑과 함께 한 번에 띄우는 설명서입니다. ROS 2에서는 Python, XML, YAML로 쓸 수 있고, 이 가이드는 Python을 씁니다.
 
+예:
+
+```python
+Node(package='demo_nodes_py', executable='talker', namespace=robot)
+```
+
+`ros2 run demo_nodes_py talker --ros-args -r __ns:=/robot1` 한 줄이 launch 파일 안에서는 `Node(...)` 하나가 됩니다(실습 2-7, 실제 파일은 여러 줄로 나눠 씁니다).
+
 **tf2.** 로봇의 각 부품(바퀴 중심, 레이저, 카메라)에는 자기 좌표계(frame)가 있습니다. tf2는 frame 사이의 위치와 방향(변환)을 `/tf`와 `/tf_static` 토픽으로 공유하고, 어느 노드든 두 frame 사이의 변환을 물어볼 수 있게 합니다. 변하지 않는 관계(몸체에 볼트로 고정한 레이저)는 `/tf_static`에, 계속 변하는 관계(움직이는 팔)는 `/tf`에 실립니다.
+
+예:
+
+```bash
+ros2 run tf2_ros tf2_echo laser camera
+```
+
+실습 2-9에서는 `base_link`와 `laser`, `base_link`와 `camera`의 관계만 발행합니다. 그런데도 `laser`에서 `camera`까지의 변환이 나오는 것은 tf2가 `laser → base_link → camera`로 이어 붙여 계산하기 때문입니다.
+
+### 코드와 폴더 구조
+
+2장을 마치면 워크스페이스는 다음 모양입니다. `src/`만 직접 다루고, 나머지 셋은 `colcon build`가 만듭니다.
+
+```text
+~/rosbook_ws/
+├── src/       직접 쓰는 소스. 패키지 폴더를 여기에 둡니다.
+├── build/     colcon이 패키지별로 빌드하는 중간 작업 폴더입니다.
+├── install/   빌드 결과가 설치되는 곳입니다. setup.bash가 여기에 있습니다.
+└── log/       빌드할 때마다 남는 로그입니다. 빌드가 실패하면 여기를 봅니다.
+```
+
+`build/`, `install/`, `log/`는 지워도 `colcon build`로 다시 만들 수 있습니다. 소스는 `src/`에만 있습니다.
+
+`basics` 패키지(ament_python)는 2장을 마친 시점에 다음과 같습니다. 각 파일의 자세한 역할은 실습 2-5의 표에 있습니다.
+
+```text
+~/rosbook_ws/src/basics/
+├── package.xml          패키지 명세서: 이름, 라이선스, 의존성 (2-5에서 생성, 2-7에서 exec_depend 추가)
+├── setup.py             설치 방법: 실행 파일 등록, launch 파일 설치 (2-5에서 생성, 2-7에서 data_files 수정)
+├── setup.cfg            실행 파일을 lib/basics/에 설치하라는 설정 (2-5에서 생성, 고치지 않음)
+├── resource/basics      ament 인덱스 등록용 빈 표시 파일 (2-5에서 생성)
+├── basics/__init__.py   노드 코드(.py)를 담을 Python 모듈 폴더 (2-5에서 생성, 노드는 3장부터)
+├── launch/talker_listener.launch.py   launch 파일 (2-7)
+├── test/                flake8, pep257, 저작권 검사 (2-5에서 생성)
+└── LICENSE              라이선스 전문 (2-5에서 생성)
+```
+
+`colcon build --symlink-install` 뒤에 `install/basics/` 아래의 주요 위치는 다음과 같습니다.
+
+```text
+~/rosbook_ws/install/basics/
+├── lib/basics/                         실행 파일 자리. 3장에서 entry_points에 등록하면 생깁니다.
+└── share/
+    ├── ament_index/resource_index/packages/basics   "basics가 있다"는 표시
+    └── basics/
+        ├── package.xml
+        └── launch/talker_listener.launch.py         src 쪽 파일을 가리키는 링크
+```
+
+`ros2 run basics <이름>`은 `lib/basics/`에서, `ros2 launch basics <파일>`은 `share/basics/launch/`에서 찾습니다. 이 두 자리를 정하는 것이 각각 `setup.cfg`와 `setup.py`의 `data_files`입니다.
+
+3장부터 만드는 노드는 모두 CONVENTIONS.md 6절의 뼈대를 따릅니다. 노드는 `Node`를 상속한 클래스이고, publisher, subscription, timer는 생성자 `__init__`에서 만듭니다. `main`은 매번 같은 모양입니다.
+
+```python
+rclpy.init(args=args)
+node = MyNode()
+rclpy.spin(node)
+rclpy.try_shutdown()
+```
+
+실제 코드는 `spin`을 `try`로 감싸 Ctrl-C를 처리하고 `finally`에서 `node.destroy_node()`를 부릅니다. 장마다 달라지는 것은 클래스 안쪽뿐이므로, 새 코드를 읽을 때는 `__init__`과 콜백부터 봅니다.
+
+### 실무 메모
+
+- Python 패키지는 처음부터 `colcon build --symlink-install`로 빌드하는 습관을 들입니다. 이미 설치된 `.py`나 launch 파일을 고칠 때는 다시 빌드하지 않아도 됩니다. 새 실행 파일이나 새 launch 파일을 추가했을 때는 다시 빌드합니다.
+- 남의 패키지를 `src/`에 받아 왔다면, 빌드하기 전에 `cd ~/rosbook_ws && rosdep install --from-paths src --ignore-src -y`로 `package.xml`에 적힌 시스템 의존성을 한 번에 설치합니다. `--ignore-src`는 워크스페이스 안에 소스로 있는 패키지는 설치하지 말라는 뜻입니다. 그래서 `package.xml`의 의존성을 정확히 적는 것이 중요합니다.
+- 같은 이름의 노드는 오류 없이 함께 실행되므로 더 위험합니다(실습 2-6). 같은 노드를 여러 개 띄울 때는 launch 파일에서 네임스페이스나 노드 이름을 처음부터 나눠 둡니다.
+- 같은 네트워크에서 여러 사람이 ROS 2를 쓰면 서로의 노드가 보입니다. 사람이나 로봇마다 다른 `ROS_DOMAIN_ID`를 정해 `~/.bashrc`에 적어 두고, 혼자 실험할 때는 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`로 같은 컴퓨터 안에만 머물게 합니다.
+- 오래 쉬었다가 돌아왔을 때 `ros2` 명령이 멈추면 daemon부터 의심합니다. daemon은 2시간 동안 질문이 없으면 스스로 종료하고, 이 WSL에서는 daemon이 없으면 CLI가 약 2분 동안 멈춥니다. Ctrl-C로 끊고 `ros2 daemon start`를 실행한 뒤 다시 입력합니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -693,3 +883,4 @@ listener 하나는 토픽 하나만 구독하므로, 그대로는 둘 중 하나
   - daemon을 끄고 켜는 동안 listener가 계속 받는다는 점은 이번 검증 스크립트에서 따로 측정하지 않았습니다. daemon이 노드 연결에 관여하지 않는다는 설계에 근거한 설명입니다.
   - 서로 다른 RMW를 쓰는 노드끼리의 통신, 기본 도메인 0에서의 실행, 학습자의 `~/rosbook_ws`에서의 실제 빌드.
   - 끄기 전에 이미 변환을 받아 둔 `tf2_echo`가 계속 출력하는지 (Q8 뒷부분).
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
