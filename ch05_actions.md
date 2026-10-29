@@ -8,12 +8,23 @@
 
 액션 하나(`/timer`)는 숨겨진 서비스 3개(goal 보내기, 결과 받기, 취소)와 숨겨진 토픽 2개(feedback, status)로 이루어집니다. 클라이언트는 goal을 보내고, 도중에 feedback을 받다가, 끝나면 결과와 상태(SUCCEEDED, CANCELED, ABORTED)를 받습니다.
 
+```mermaid
+flowchart LR
+  client("액션 클라이언트 노드")
+  sg{{"/timer/_action/send_goal"}}
+  cg{{"/timer/_action/cancel_goal"}}
+  gr{{"/timer/_action/get_result"}}
+  fb["/timer/_action/feedback"]
+  st["/timer/_action/status"]
+  server("fancy_action_server 노드<br/>execute 콜백")
+  client -->|"goal"| sg --> server
+  client -->|"취소 요청"| cg --> server
+  client -->|"결과 요청"| gr --> server
+  server -->|"publish_feedback"| fb --> client
+  server -->|"goal 상태 목록"| st --> client
 ```
-action client ──send_goal(서비스)──▶ /timer ──▶ action server의 execute()
-              ◀──feedback(토픽)────           ◀── publish_feedback() 여러 번
-              ──cancel_goal(서비스)─▶           ── is_cancel_requested 확인
-              ──get_result(서비스)──▶ ... 끝나면 결과 + 상태 응답
-```
+
+그림에서 볼 것: 액션 `/timer` 하나를 열면 육각형(서비스) 3개와 네모(토픽) 2개가 함께 생깁니다. 답이 필요한 것은 서비스이고, 계속 흘려보내는 것은 토픽입니다. 이름에 `_action`이 들어 있어서 기본 목록에는 보이지 않습니다(실습 5-3).
 
 ## 1. 목표와 개념
 
@@ -28,6 +39,139 @@ action client ──send_goal(서비스)──▶ /timer ──▶ action server
 비유: 서비스가 창구에서 바로 답을 받는 일이라면, 액션은 택배를 맡기는 일입니다. 접수(goal 수락), 배송 조회(feedback), 배송 완료 또는 반송(result와 status), 배송 취소 요청(cancel)이 따로 있습니다.
 
 이 장은 원서와 같은 예제, 즉 지정한 시간만큼 기다리는 `timer` 액션을 만듭니다. 먼저 feedback도 취소도 없는 단순한 서버와 클라이언트를 만들고(원서 PDF p.84~88), 다음에 feedback, 취소, abort를 갖춘 서버와 클라이언트로 키웁니다(원서 PDF p.88~93).
+
+**goal 하나가 오가는 순서.** 클라이언트는 future를 두 번 기다립니다. 처음에는 "서버가 goal을 받았는가", 다음에는 "goal이 어떻게 끝났는가"입니다. 그 사이에 feedback이 토픽으로 들어옵니다.
+
+```mermaid
+sequenceDiagram
+  participant c as fancy_action_client 노드
+  participant s as fancy_action_server 노드
+  c->>s: send_goal 요청 (goal과 goal ID)
+  s-->>c: send_goal 응답 (수락)
+  c->>s: get_result 요청
+  loop 1초마다
+    s-->>c: feedback 토픽 (경과, 남음)
+  end
+  opt 도중에 취소할 때
+    c->>s: cancel_goal 요청
+    s-->>c: cancel_goal 응답 (취소 수락)
+  end
+  s-->>c: get_result 응답 (status와 result)
+```
+
+그림에서 볼 것: 결과 요청(`get_result`)은 goal이 수락되자마자 보내 두고, 응답은 일이 끝났을 때 옵니다. 취소 요청에 대한 응답은 "멈췄다"가 아니라 "취소를 받아들였다"는 뜻이고, 최종 상태는 `get_result` 응답에 담겨 옵니다.
+
+예:
+
+```python
+send_future = client.send_goal_async(goal, feedback_callback=on_feedback)
+goal_handle = send_future.result()
+result_future = goal_handle.get_result_async()
+cancel_future = goal_handle.cancel_goal_async()
+```
+
+실습 5-5 클라이언트에서 뽑은 네 줄입니다(사이의 `spin_until_future_complete` 줄은 뺐습니다). goal을 보내면 goal handle이 돌아오고, 결과 요청과 취소 요청은 모두 그 handle로 합니다.
+
+**goal의 상태.** 서버는 goal마다 상태를 하나씩 들고 있고, 바뀔 때마다 `status` 토픽으로 알립니다. 상태 이름과 숫자는 `action_msgs/msg/GoalStatus`에 정의되어 있습니다.
+
+```mermaid
+stateDiagram-v2
+  [*] --> ACCEPTED: goal 수락
+  ACCEPTED --> EXECUTING: 실행 시작
+  ACCEPTED --> CANCELING: 취소 수락
+  EXECUTING --> CANCELING: 취소 수락
+  EXECUTING --> SUCCEEDED: succeed()
+  EXECUTING --> ABORTED: abort()
+  CANCELING --> CANCELED: canceled()
+  CANCELING --> SUCCEEDED: succeed()
+  CANCELING --> ABORTED: abort()
+  SUCCEEDED --> [*]
+  CANCELED --> [*]
+  ABORTED --> [*]
+```
+
+그림에서 볼 것: 취소를 수락해도 goal은 CANCELING에 머물 뿐 끝나지 않습니다. 서버 코드가 `canceled()`를 불러야 CANCELED가 되고, 그 전에 `succeed()`를 부르면 SUCCEEDED로 끝납니다(실습 5-4의 52~56줄 해설). 끝난 세 상태에서는 더 이상 바뀌지 않습니다.
+
+예:
+
+```python
+if goal_handle.is_cancel_requested:
+    goal_handle.canceled()
+```
+
+실습 5-4 서버의 반복문 안에 있는 확인입니다. rclpy 소스에서 `is_cancel_requested`는 "지금 상태가 CANCELING인가"를 돌려주는 속성입니다.
+
+**취소를 받으려면 스레드가 둘 이상이어야 합니다.** 4장 실습 4-5의 교착과 같은 구조입니다. `execute`가 `time.sleep()`으로 스레드 하나를 붙잡고 있는 동안, 다른 스레드가 취소 요청을 받아 `on_cancel`을 실행해야 goal 상태가 CANCELING으로 바뀝니다.
+
+```mermaid
+sequenceDiagram
+  participant c as fancy_action_client 노드
+  participant t1 as 서버 스레드 1
+  participant t2 as 서버 스레드 2
+  c->>t1: goal
+  Note over t1: execute 반복문<br/>feedback 보내고 1초 잠듦
+  c->>t2: cancel_goal 요청
+  t2->>t2: on_cancel이 ACCEPT 반환<br/>상태는 CANCELING
+  t2-->>c: 취소 수락
+  Note over t1: 깨어나서 is_cancel_requested 확인<br/>canceled() 호출
+  t1-->>c: 결과 (CANCELED)
+```
+
+그림에서 볼 것: 스레드 2가 없으면 취소 요청은 스레드 1이 `execute`를 마칠 때까지 처리되지 않습니다. 그래서 4절의 단일 스레드 실험에서는 취소를 요청해도 SUCCEEDED가 나옵니다.
+
+예:
+
+```python
+self.server = ActionServer(
+    self, Timer, 'timer', self.execute,
+    cancel_callback=self.on_cancel,
+    callback_group=ReentrantCallbackGroup())
+```
+
+실습 5-4 서버의 생성 부분입니다. 이 서버는 `main()`에서 `rclpy.spin(node)` 대신 `MultiThreadedExecutor()`로 돕니다. `MultiThreadedExecutor`가 스레드를 여러 개 두고, `ReentrantCallbackGroup`은 이 액션 서버의 콜백들이 동시에 실행되어도 된다고 표시합니다. 콜백 그룹(callback group: 어떤 콜백끼리 동시에 실행해도 되는지 정하는 묶음)을 지정하지 않으면 노드의 기본 그룹에 들어가고, 기본 그룹은 한 번에 콜백 하나만 실행합니다. 콜백 그룹을 지정하지 않은 액션 서버에서도 취소가 동작하는 경우는 19장에서 다룹니다.
+
+### 코드와 폴더 구조
+
+4장의 구조에 액션 정의 하나와 실행 파일 네 개가 더해집니다. 4장까지 만든 파일은 `...`로 줄였습니다.
+
+```text
+~/rosbook_ws/src/
+├── basics_interfaces/
+│   ├── CMakeLists.txt        find_package(builtin_interfaces), "action/Timer.action",
+│   │                         DEPENDENCIES builtin_interfaces 추가 (실습 5-1)
+│   ├── package.xml           <depend>builtin_interfaces</depend> 추가 (실습 5-1)
+│   ├── msg/ srv/             3장, 4장
+│   └── action/
+│       └── Timer.action      goal, result, feedback 세 부분 (실습 5-1)
+└── basics/
+    ├── package.xml           <exec_depend>action_msgs</exec_depend> 추가 (실습 5-5)
+    ├── setup.py              console_scripts에 네 줄 추가
+    └── basics/
+        ├── ...                     3장, 4장의 노드들
+        ├── simple_action_server.py   feedback과 취소가 없는 서버 (실습 5-2)
+        ├── simple_action_client.py   goal 하나를 보내고 결과를 받는 클라이언트 (실습 5-2)
+        ├── fancy_action_server.py    feedback, 취소, abort를 갖춘 서버 (실습 5-4)
+        └── fancy_action_client.py    feedback을 받고 취소를 보내는 클라이언트 (실습 5-5)
+```
+
+- 빌드 뒤 생성된 Python 코드는 `.../site-packages/basics_interfaces/action/_timer.py` 하나에 들어갑니다. 이 파일 안에 `Timer`의 `Goal`, `Result`, `Feedback`과 실습 5-3에서 보는 `Timer_SendGoal`, `Timer_GetResult`, `Timer_FeedbackMessage`가 함께 만들어집니다.
+- 액션 서버 노드의 뼈대는 4장의 서비스 서버와 다음이 다릅니다.
+
+| | 서비스 서버 (4장) | 액션 서버 (5장) |
+|---|---|---|
+| 만들기 | `self.create_service(WordCount, 'word_count', self.count_words)` | `ActionServer(self, Timer, 'timer', self.execute, cancel_callback=...)` |
+| 콜백이 받는 것 | `request`, `response` | `goal_handle` 하나 |
+| 요청 읽기 | `request.words` | `goal_handle.request.time_to_wait` |
+| 중간 보고 | 없음 | `goal_handle.publish_feedback(feedback)` |
+| 끝내기 | `return response` | `succeed()`, `abort()`, `canceled()` 중 하나를 부르고 `return result` |
+| executor | `rclpy.spin(node)` | 취소를 받으려면 `MultiThreadedExecutor` |
+
+### 실무 메모
+
+- 취소는 세 군데에서 처리합니다. `cancel_callback`으로 취소를 받아들이고, 실행 반복문 안에서 `is_cancel_requested`를 확인하고, 반복문을 빠져나온 뒤에도 한 번 더 확인합니다. 하나라도 빠지면 취소가 무시되거나 SUCCEEDED로 끝납니다.
+- feedback 주기는 실행 반복문 한 바퀴의 길이가 정하고, 같은 길이가 취소에 반응하는 시간도 정합니다. 이 장의 서버는 1초 단위라서 2.5초에 보낸 취소가 3.0초에 처리되었습니다. 빨리 멈춰야 하는 액션(로봇 이동 등)은 반복 간격을 짧게 둡니다.
+- 클라이언트는 상태를 보고 판단합니다. 취소를 요청했어도 SUCCEEDED가 올 수 있으므로, `response.status`를 `GoalStatus.STATUS_CANCELED` 같은 상수와 비교합니다.
+- goal을 보내기 전에 `ros2 action info /timer`로 `Action servers:`가 1인지 확인하는 습관을 들입니다. 같은 이름의 서버가 둘이면 어느 쪽이 goal을 받을지 알 수 없습니다(13장).
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -739,3 +883,4 @@ QoS 불일치는 이 장의 코드로는 만들기 어렵습니다. 액션의 �
   - 4절의 액션 타입 불일치, `succeed()` 삭제, 5절 Q2의 단순 서버 순차 처리, Q4의 `REJECT`, Q5의 클라이언트 강제 종료. 이 항목들은 rclpy 동작에 대한 설명이며 직접 실행하지 않았습니다.
   - 기본 RMW(Fast DDS)에서의 동작. 이 WSL 환경에서는 Fast DDS로 프로세스 사이 통신이 되지 않아서 Cyclone DDS로만 검증했습니다.
   - 학습자의 실제 `~/rosbook_ws`에서의 빌드.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
