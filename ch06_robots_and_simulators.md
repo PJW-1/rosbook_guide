@@ -8,15 +8,29 @@
 로봇의 각 하위 시스템(구동, 센서, 자세 추정)은 결국 "토픽 이름 + 메시지 타입"으로 바깥에 드러납니다.
 Gazebo는 ROS 노드가 아니며, 둘 사이는 `ros_gz_bridge`라는 별도 노드가 토픽 단위로 번역합니다.
 
+```mermaid
+flowchart LR
+  gz[("Gazebo gz-sim<br/>DiffDrive, gpu_lidar, 시계")]
+  bridge("ros_gz_bridge 노드")
+  scan["/scan"]
+  odom["/odom"]
+  clock["/clock"]
+  cmd["/cmd_vel"]
+  me("내 노드<br/>7장 wander 등")
+  rsp("robot_state_publisher")
+  tfs["/tf_static<br/>/robot_description"]
+  gz -->|"gz-transport: scan, odom, tf, clock"| bridge
+  bridge --> scan
+  bridge --> odom
+  bridge --> clock
+  scan --> me
+  me -->|"TwistStamped"| cmd
+  cmd --> bridge
+  bridge -->|"gz-transport: cmd_vel"| gz
+  rsp --> tfs
 ```
- Gazebo (gz-transport)                  ROS 2 (DDS)
- ┌──────────────────┐   parameter_bridge   ┌──────────────────────────┐
- │ DiffDrive 플러그인 │◀── cmd_vel ─────────│ 내 노드 (TwistStamped)     │
- │ gpu_lidar 센서     │── scan, odom, tf ──▶│ rviz2, wander 등          │
- │ 시뮬레이션 시계     │── clock ───────────▶│ use_sim_time:=true 노드들  │
- └──────────────────┘   (/ros_gz_bridge)   └──────────────────────────┘
-                         robot_state_publisher ── /tf_static, /robot_description
-```
+
+그림에서 볼 것: Gazebo는 ROS 노드가 아니라 원통(외부 프로그램)입니다. ROS 쪽 토픽은 모두 `ros_gz_bridge` 노드에서 나오거나 그리로 들어갑니다. `/tf_static`과 `/robot_description`만 Gazebo와 무관하게 `robot_state_publisher`가 냅니다.
 
 ## 1. 목표와 개념
 원서 6장은 코드를 거의 쓰지 않는 개념 장입니다. 로봇을 구동계, 센서, 계산 장치로 나누어 보고, 각 부분이 ROS에서 어떤 메시지 타입으로 표현되는지 정리한 뒤(원서 PDF p.98~108), 실제 로봇 몇 종(PR2, Fetch, Robonaut 2, TurtleBot, PDF p.108~112)과 시뮬레이터(Stage, Gazebo, PDF p.112~116)를 소개합니다.
@@ -30,6 +44,128 @@ Gazebo는 ROS 노드가 아니며, 둘 사이는 `ros_gz_bridge`라는 별도 �
 - **QoS의 durability**: `/tf_static`과 `/robot_description`은 나중에 접속한 subscriber도 마지막 값을 받도록 TRANSIENT_LOCAL로 발행됩니다.
 
 비유: 브리지는 두 나라 사이의 통역사입니다. 통역사 명단(yaml)에 없는 말은 건너가지 않습니다.
+
+**브리지의 명단(yaml).** 명단은 항목마다 ROS 쪽 토픽 이름과 타입, Gazebo 쪽 토픽 이름과 타입, 방향을 적습니다. 방향이 `ROS_TO_GZ`이면 ROS의 메시지를 Gazebo로 넘기고, `GZ_TO_ROS`이면 반대입니다. 실습 6-3에서 읽는 파일의 `cmd_vel` 항목은 다음과 같습니다.
+
+예:
+```yaml
+- ros_topic_name: "cmd_vel"
+  ros_type_name: "geometry_msgs/msg/TwistStamped"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+```
+
+ROS 쪽 타입이 `TwistStamped`로 적혀 있으므로 `Twist`를 보내도 이 항목에는 전달되지 않습니다. 이 항목 하나가 `/cmd_vel`을 브리지의 subscriber로 만듭니다.
+
+**launch 파일이 launch 파일을 부르는 구조.** `turtlebot3_world.launch.py` 하나가 Gazebo 서버와 창, 로봇 생성, 브리지, `robot_state_publisher`를 모두 띄웁니다. 직접 일을 하는 것이 아니라 다른 launch 파일을 포함(include)하는 방식입니다.
+
+```mermaid
+flowchart TB
+  world[("turtlebot3_world.launch.py")]
+  gzs[("gz_sim.launch.py<br/>서버, -s")]
+  gzc[("gz_sim.launch.py<br/>창, -g")]
+  spawn[("spawn_turtlebot3.launch.py")]
+  rspl[("robot_state_publisher.launch.py")]
+  create("create 노드")
+  bridge("parameter_bridge 노드<br/>/ros_gz_bridge")
+  img("image_bridge 노드")
+  rsp("robot_state_publisher 노드")
+  yaml[("turtlebot3_waffle_pi_bridge.yaml")]
+  sdf[("model.sdf")]
+  world -.-> gzs
+  world -.-> gzc
+  world -.-> spawn
+  world -.-> rspl
+  spawn -.-> create
+  spawn -.-> bridge
+  spawn -.-> img
+  rspl -.-> rsp
+  yaml -.-> bridge
+  sdf -.-> create
+```
+
+그림에서 볼 것: 점선은 "include" 또는 "읽는다"는 보조 관계입니다. 브리지와 image bridge는 `spawn_turtlebot3.launch.py` 안에서 시작되고, 브리지는 yaml을 설정으로 읽습니다. 실습 6-3에서 이 파일을 열어 같은 구조를 확인합니다.
+
+예: 자식 launch 파일에 인자를 넘기는 부분입니다(`turtlebot3_world.launch.py`에서 가져왔습니다).
+```python
+IncludeLaunchDescription(
+    PythonLaunchDescriptionSource(os.path.join(launch_file_dir, 'robot_state_publisher.launch.py')),
+    launch_arguments={'use_sim_time': use_sim_time}.items())
+```
+`launch_arguments`로 `use_sim_time`이 자식 launch 파일로 전달되고, 거기서 `robot_state_publisher` 노드의 파라미터가 됩니다.
+
+**시뮬레이션 시간 확인.** `/clock`은 브리지가 Gazebo의 시계를 내보낸 토픽이고, 노드가 이를 따르는지는 파라미터 하나로 정해집니다.
+
+예:
+```bash
+ros2 param get /robot_state_publisher use_sim_time
+```
+`true`이면 그 노드의 `get_clock().now()`가 `/clock`을 따릅니다. 내 노드를 시뮬과 함께 쓸 때는 `--ros-args -p use_sim_time:=true`를 붙입니다.
+
+**TF 트리.** TurtleBot3 Waffle Pi의 URDF는 `base_footprint`에서 시작해 `base_link` 아래에 바퀴와 센서가 매달린 구조입니다. URDF에는 `odom`이 없고, `odom`은 Gazebo의 DiffDrive가 `/tf`로 만들어 냅니다.
+
+```mermaid
+flowchart TB
+  odom["odom"]
+  fp["base_footprint"]
+  bl["base_link"]
+  wl["wheel_left_link"]
+  wr["wheel_right_link"]
+  scan["base_scan"]
+  imu["imu_link"]
+  cam["camera_link"]
+  rgb["camera_rgb_frame"]
+  opt["camera_rgb_optical_frame"]
+  odom -->|"/tf, DiffDrive"| fp
+  fp -->|"/tf_static"| bl
+  bl -->|"/tf, joint_states"| wl
+  bl --> wr
+  bl -->|"/tf_static"| scan
+  bl --> imu
+  bl --> cam
+  cam --> rgb
+  rgb --> opt
+```
+
+그림에서 볼 것: 상자는 토픽이 아니라 좌표계(frame)이고, 화살표는 "부모에서 자식으로의 변환"입니다. 움직이는 변환(`odom`→`base_footprint`, 바퀴)은 `/tf`로, 몸체에 고정된 변환은 `/tf_static`으로 나갑니다. 뒤쪽 보조 바퀴(caster) frame은 생략했습니다. LiDAR frame 이름이 `base_scan`이므로 `/scan` 메시지의 `header.frame_id`도 이 이름입니다.
+
+예:
+```bash
+ros2 run tf2_ros tf2_echo odom base_scan
+```
+`odom`에서 `base_scan`까지 트리를 따라 내려가며 변환을 곱한 결과를 출력합니다. 중간 frame이 끊겨 있으면 이 명령이 변환을 찾지 못합니다.
+
+**durability가 갈리는 토픽.** 한 번만 나오는 정보(`/tf_static`, `/robot_description`)는 TRANSIENT_LOCAL로, 계속 갱신되는 정보(`/tf`, `/scan`)는 VOLATILE로 나갑니다.
+
+예:
+```bash
+ros2 topic info -v /tf_static
+```
+Publisher 항목의 Durability가 `TRANSIENT_LOCAL`입니다. 같은 명령을 `/tf`에 쓰면 `VOLATILE`이 나옵니다.
+
+### 외부 패키지 구성: turtlebot3_gazebo
+이 장은 패키지를 만들지 않으므로, 실습에서 계속 열어 보는 `turtlebot3_gazebo`의 설치된 모양을 봅니다. 위치는 `/opt/ros/jazzy/share/turtlebot3_gazebo/`입니다.
+
+```text
+turtlebot3_gazebo/
+├── launch/    turtlebot3_world.launch.py (전체를 띄움), spawn_turtlebot3.launch.py,
+│              robot_state_publisher.launch.py, empty_world / house / dqn_stage1~4 launch
+├── models/    turtlebot3_waffle_pi/model.sdf 등 (Gazebo가 읽는 로봇 모델, 로봇 종류별 폴더)
+├── params/    turtlebot3_waffle_pi_bridge.yaml 등 (브리지 명단, 로봇 종류별 파일)
+├── rviz/      tb3_gazebo.rviz (8장에서 쓰는 rviz2 설정)
+├── urdf/      turtlebot3_waffle_pi.urdf 등 (robot_state_publisher가 읽는 로봇 모델)
+└── worlds/    turtlebot3_world.world 등 (Gazebo 월드)
+```
+
+- 같은 로봇이 SDF(`models/`)와 URDF(`urdf/`)로 두 번 적혀 있습니다. Gazebo는 SDF를, `robot_state_publisher`는 URDF를 읽습니다.
+- launch 파일은 환경 변수 `TURTLEBOT3_MODEL`(여기서는 `waffle_pi`)로 `turtlebot3_<모델>`이라는 이름의 폴더와 파일을 고릅니다. 그래서 `~/.bashrc`의 이 값이 틀리면 엉뚱한 로봇이 뜨거나 파일을 찾지 못합니다.
+- 이 폴더들은 패키지의 `share/` 아래에 설치된 것이므로, 2장에서 본 ament_python 패키지의 `share/<패키지>/launch/`와 같은 위치 규칙입니다.
+
+### 실무 메모
+- **`use_sim_time`은 시뮬을 바라보는 모든 노드에 줍니다.** 내 노드, rviz2, rqt 도구 하나라도 빠지면 그 노드만 벽시계를 써서 tf와 시각 비교가 어긋납니다. 헷갈리면 `ros2 param get <노드> use_sim_time`으로 노드마다 확인합니다.
+- **토픽이 안 보이면 브리지 yaml부터 읽습니다.** Gazebo에 있는 토픽도 yaml에 없으면 ROS로 넘어오지 않습니다. 원본은 `/opt/ros` 아래 읽기 전용으로 두고, 바꿔 볼 때는 복사본을 만듭니다.
+- **frame 이름은 관례를 따릅니다.** `odom`, `base_link` 같은 이름과 변환의 부모 자식 구조는 REP 105가 정합니다. 다른 로봇으로 바꿔도 같은 노드를 쓸 수 있는 이유 중 하나입니다.
+- **launch 파일은 읽는 습관을 들입니다.** 외부 패키지의 launch 파일을 실행하기 전에 `ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py --show-args`로 받는 인자를 보고, 파일을 열어 무엇을 포함하는지 확인하면 문제를 찾는 시간이 줄어듭니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 | 원서 (ROS 1) | ROS 2 Jazzy | 이유와 주의점 |
@@ -260,3 +396,4 @@ Gazebo 안의 LiDAR 센서는 그대로 동작하고 `gz topic -l`에도 계속 
   - Gazebo 일시정지 시 `/clock` 정지, 실제 `tf2_echo odom base_scan` 값, 시뮬에서 `/tf`의 publisher가 브리지와 robot_state_publisher 둘인지: 확인 못 함(시뮬 필요).
   - `view_frames` PDF, rqt_graph 화면, rviz2 경고: 확인 못 함(GUI).
   - 브리지 노드만 끄는 실험의 정확한 증상: 확인 못 함(시뮬 필요).
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
