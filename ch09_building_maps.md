@@ -9,15 +9,24 @@
 지도는 `/map` 토픽 위의 `nav_msgs/msg/OccupancyGrid` 메시지 하나이고, 늦게 들어온 subscriber도 받도록 `transient_local`로 발행됩니다.
 SLAM 노드는 `/scan`과 tf를 받아 `/map`과 `map → odom` 변환을 만들고, `map_server`는 저장된 파일로 같은 `/map`을 다시 만들어 냅니다. 둘 다 lifecycle 노드입니다.
 
+```mermaid
+flowchart LR
+  gz[("Gazebo")] --> bridge("ros_gz_bridge")
+  bridge -->|"LaserScan"| scan["/scan"]
+  bridge -->|"odom → base_footprint"| tf["/tf"]
+  rsp("robot_state_publisher") -->|"base_footprint → base_link → base_scan"| tf_static["/tf_static"]
+  scan --> slam("slam_toolbox")
+  tf --> slam
+  tf_static --> slam
+  slam -->|"map → odom"| tf
+  slam -->|"OccupancyGrid, transient_local"| map["/map"]
+  map --> saver("map_saver_cli")
+  saver --> files[("tb3_world.yaml<br/>tb3_world.pgm")]
+  files --> ms("map_server")
+  ms -->|"9-6에서 같은 이름으로"| map
 ```
-[Gazebo] ─ ros_gz_bridge ─┬─ /scan (LaserScan) ──────────────┐
-                          └─ /tf  odom → base_footprint ─────┤
-robot_state_publisher ── /tf_static base_footprint → base_link → base_scan
-                                                             ▼
-                                         slam_toolbox ── /map (transient_local)
-                                                      └─ /tf  map → odom
-/map ── map_saver_cli ──▶ tb3_world.yaml + tb3_world.pgm ──▶ map_server ── /map
-```
+
+그림에서 볼 것: `/map`을 내는 노드가 두 개(slam_toolbox, map_server)이지만 받는 쪽은 토픽 이름과 타입만 봅니다. 그리고 `/tf`에는 세 노드가 각자 맡은 변환을 냅니다.
 
 ## 1. 목표와 개념
 
@@ -25,19 +34,150 @@ robot_state_publisher ── /tf_static base_footprint → base_link → base_sc
 
 **OccupancyGrid**: 바닥을 일정한 크기의 정사각형 칸(cell)으로 나누고, 칸마다 "막혀 있는지"를 숫자로 적은 지도입니다. ROS 2 메시지에서는 칸 하나가 `int8` 값 하나이고, 보통 0은 비어 있음, 100은 막혀 있음, -1은 모름을 뜻합니다. 칸들은 `data` 배열에 한 줄로 들어 있고, 지도 왼쪽 아래 칸 (0, 0)부터 x 방향으로 먼저 채웁니다. 그래서 (열 `col`, 행 `row`) 칸의 값은 `data[row * width + col]`입니다.
 
+예:
+
+```python
+col = int((x - info.origin.position.x) / info.resolution)
+row = int((y - info.origin.position.y) / info.resolution)
+value = msg.data[row * info.width + col]
+```
+
+실습 9-2의 `map_info.py`에서 가져온 줄입니다. 세계 좌표(m)에서 원점을 빼고 칸 크기로 나누면 칸 번호가 되고, 그 번호로 1차원 배열 `data`에서 값을 꺼냅니다.
+
 **지도 파일 두 개**: 디스크에서는 지도 한 장이 이미지 파일(PGM)과 YAML 파일 한 쌍입니다. 이미지에는 칸의 밝기가, YAML에는 칸 하나의 크기(`resolution`, m/칸), 이미지 왼쪽 아래 칸이 세계 좌표 어디에 있는지(`origin`), 밝기를 점유 확률로 바꾸는 기준(`occupied_thresh`, `free_thresh`, `negate`)이 들어 있습니다.
 
 `negate: 0`일 때 Nav2 map_server는 밝기 `v`(0~255)를 `p = (255 - v) / 255`로 바꾼 뒤, `p > occupied_thresh`이면 100, `p < free_thresh`이면 0, 그 사이면 -1로 정합니다 (`mode: trinary`). 검은색(0)은 p=1이라 막힘, 흰색(254)은 p≈0이라 비어 있음, 회색(205)은 p≈0.196이라 모름이 됩니다. 이미지는 위쪽 줄부터 저장되지만 지도의 행 번호는 아래쪽부터 세므로, map_server가 읽을 때 위아래를 뒤집습니다.
 
+```mermaid
+flowchart LR
+  yaml[("tiny.yaml<br/>resolution, origin, thresh")] -.->|"image: tiny.pgm"| pgm[("tiny.pgm<br/>칸마다 밝기 0~255")]
+  yaml --> ms("map_server")
+  pgm --> ms
+  ms -->|"칸마다 0, 100, -1"| map["/map"]
+  map --> info("map_info 노드")
+```
+
+그림에서 볼 것: 디스크의 두 파일은 map_server를 거쳐야 ROS 메시지가 됩니다. YAML이 이미지 파일을 가리키고, map_server는 YAML의 기준값으로 밝기를 0, 100, -1로 바꿉니다.
+
+예:
+
+```yaml
+image: tiny.pgm
+resolution: 0.5
+origin: [-1.0, -1.0, 0.0]
+```
+
+실습 9-1의 `tiny.yaml` 앞부분입니다. `image`는 YAML 파일이 있는 폴더 기준의 상대 경로라서, 두 파일은 같은 폴더에 함께 두고 함께 옮깁니다.
+
 **SLAM**: 지도를 만들려면 로봇 위치를 알아야 하고, 위치를 정확히 알려면 지도가 필요합니다. 이 둘을 동시에 추정하는 것이 SLAM(Simultaneous Localization and Mapping)입니다. 이 장에서는 slam_toolbox를 씁니다.
+
+예:
+
+```yaml
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_footprint
+    scan_topic: /scan
+```
+
+실습 9-4에서 쓰는 `/opt/ros/jazzy/share/slam_toolbox/config/mapper_params_online_async.yaml`의 일부입니다. slam_toolbox가 어떤 frame과 토픽을 입력으로 삼는지가 이름으로 정해져 있고, TurtleBot3 시뮬의 이름과 같기 때문에 고칠 것이 없습니다.
 
 **map → odom**: 오도메트리(`odom → base_footprint`)는 바퀴 회전으로 위치를 적분하므로 시간이 지나면 조금씩 어긋납니다. SLAM 노드는 레이저 스캔을 지도와 맞춰 보고, 그 어긋남을 고치는 변환을 `map → odom`으로 발행합니다. 오도메트리 쪽 tf는 건드리지 않고 그 위에 보정 한 단계를 얹는 구조입니다.
 
 비유: `odom`은 걸음 수로 잰 내 위치이고, `map → odom`은 건물 안내도를 보고 "실제로는 여기서 조금 옆이다"라고 고쳐 주는 쪽지입니다.
 
+```mermaid
+flowchart TB
+  map_f["map 프레임"] -->|"slam_toolbox가 /tf로"| odom_f["odom 프레임"]
+  odom_f -->|"Gazebo DiffDrive, ros_gz_bridge가 /tf로"| foot_f["base_footprint 프레임"]
+  foot_f -->|"robot_state_publisher가 /tf_static으로"| link_f["base_link 프레임"]
+  link_f -->|"robot_state_publisher가 /tf_static으로"| scan_f["base_scan 프레임"]
+```
+
+그림에서 볼 것: 이 상자들은 토픽이 아니라 frame입니다. 화살표 하나가 변환 하나이고, 변환마다 내는 노드가 하나씩 정해져 있습니다. 2장의 tf2 구조 위에 SLAM이 맨 위 한 단계(`map → odom`)만 얹습니다. 그래서 slam_toolbox를 끄면 `map` 프레임만 사라지고 아래 사슬은 그대로 남습니다.
+
+예:
+
+```bash
+ros2 run tf2_ros tf2_echo map base_footprint --ros-args -p use_sim_time:=true
+```
+
+실습 9-4의 명령입니다. `map`에서 `base_footprint`까지 가는 변환 두 개(SLAM 보정과 오도메트리)를 tf2가 이어 붙여 하나로 보여 줍니다.
+
 **bag**: 토픽에 흐르는 메시지를 시각과 함께 파일에 기록했다가 나중에 똑같이 다시 발행하는 도구입니다. 같은 센서 데이터로 SLAM 파라미터를 여러 번 바꿔 볼 수 있어서, 원서도 지도를 만들기 전에 bag을 먼저 소개합니다 (원서 PDF p.158~160).
 
+예:
+
+```bash
+ros2 bag record -o tb3_drive --use-sim-time /scan /tf /tf_static /odom
+ros2 bag play ~/rosbook_ws/bags/tb3_drive --clock
+```
+
+실습 9-4와 9-5의 명령입니다. 기록할 때 고른 토픽 이름이 재생할 때 그대로 다시 발행되므로, slam_toolbox는 Gazebo가 없어도 같은 입력을 받습니다.
+
 **lifecycle 노드**: Nav2의 map_server는 실행하자마자 일을 시작하지 않습니다. `unconfigured → (configure) → inactive → (activate) → active` 순서로 상태를 바꿔 줘야 `/map`을 발행합니다. 여러 노드를 정해진 순서로 준비시키고, 문제가 생기면 한꺼번에 멈추기 위한 ROS 2의 구조입니다. 이 장의 실습 9-3에서 이 전환을 손으로 직접 해 봅니다.
+
+```mermaid
+stateDiagram-v2
+  [*] --> unconfigured
+  unconfigured --> inactive : configure
+  inactive --> active : activate
+  active --> inactive : deactivate
+```
+
+그림에서 볼 것: map_server는 상태마다 하는 일이 다릅니다. configure에서 YAML과 이미지를 읽고 `/map` publisher를 만들며, activate에서 지도를 발행합니다. deactivate로 inactive에 돌아와도 publisher는 남아 있고 발행만 멈춥니다 (실습 9-3, 9-6).
+
+예:
+
+```bash
+ros2 lifecycle set /map_server configure
+ros2 lifecycle get /map_server
+```
+
+실습 9-3의 명령입니다. 두 번째 줄의 출력이 `unconfigured [1]`에서 `inactive [2]`로 바뀝니다. `ros2 lifecycle set`은 노드의 `/map_server/change_state` 서비스를 부르는 도구이고, 실습 9-6의 lifecycle_manager도 같은 서비스를 부릅니다.
+
+### 코드와 폴더 구조
+
+이 장은 `nav_bot` 패키지를 처음 만들고, 패키지 밖에 지도와 bag을 둘 폴더를 만듭니다. ament_python 패키지의 기본 구성은 7장의 `wander_bot`과 같습니다.
+
+```text
+~/rosbook_ws/
+├── src/nav_bot/
+│   ├── package.xml        rclpy, nav_msgs, nav2_msgs 등 9~10장 의존성 (9-2의 ros2 pkg create가 작성)
+│   ├── setup.py           entry_points에 map_info 등록 (9-2)
+│   ├── setup.cfg          ros2 pkg create가 작성, 고치지 않음
+│   ├── resource/nav_bot   패키지 표시 파일, 고치지 않음
+│   ├── nav_bot/
+│   │   ├── __init__.py
+│   │   └── map_info.py    /map 구독, 지도 정보와 칸 값 출력 (9-2)
+│   └── test/              flake8, pep257, copyright 검사 (ros2 pkg create가 작성)
+├── maps/
+│   ├── make_tiny_map.py   tiny.pgm을 만드는 스크립트 (9-1)
+│   ├── tiny.pgm           손으로 만든 10×6칸 이미지 (9-1)
+│   ├── tiny.yaml          tiny.pgm의 해상도, 원점, 기준값 (9-1)
+│   ├── tb3_world.pgm      slam_toolbox로 만든 지도 이미지 (9-4)
+│   ├── tb3_world.yaml     위 이미지의 설명 파일, 10장의 map:= 인자로 씀 (9-4)
+│   └── tb3_world_bag.*    bag 재생으로 다시 만든 지도 (9-5)
+└── bags/tb3_drive/        metadata.yaml과 .mcap 파일 (9-4)
+```
+
+- `maps/`와 `bags/`는 `package.xml`이 없는 보통 폴더라서 colcon이 빌드하지 않고, `install/`에도 복사되지 않습니다. 그래서 명령에는 `$HOME/rosbook_ws/maps/tb3_world.yaml`처럼 절대 경로를 씁니다.
+- `map_info.py`의 뼈대는 CONVENTIONS.md 6절의 기본 형태와 같고, 달라지는 점은 subscription에 QoS 객체를 넘기는 것 하나입니다.
+
+  ```python
+  qos = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
+                   durability=DurabilityPolicy.TRANSIENT_LOCAL)
+  self.create_subscription(OccupancyGrid, 'map', self.on_map, qos)
+  ```
+
+  실습 9-2의 코드를 두 줄로 줄여 쓴 것입니다. 숫자 `10` 대신 QoS 객체를 넘기면 durability까지 publisher와 맞출 수 있습니다.
+
+### 실무 메모
+
+- frame 이름은 REP 105(Coordinate Frames for Mobile Platforms)의 `map`, `odom`, `base_link`와 그 사슬(`map → odom → base_link`)을 따릅니다. 이름을 표준대로 두면 slam_toolbox와 Nav2의 기본 설정을 거의 고치지 않고 씁니다. 실습 9-4의 `mapper_params_online_async.yaml`이 그 예입니다.
+- lifecycle 노드를 쓰는 이유는 시작 순서와 재시작을 밖에서 제어하기 위해서입니다. 지도 파일 읽기처럼 실패할 수 있는 일을 configure에 두면, 발행을 시작하기 전에 실패를 알 수 있습니다. Nav2의 lifecycle_manager는 관리하는 노드와 bond 연결을 유지하다가 응답이 끊긴 노드를 발견하면 시스템을 내립니다 (설치된 `nav2_lifecycle_manager/lifecycle_manager.hpp`의 주석).
+- 지도는 PGM과 YAML 두 파일이 한 쌍이므로 함께 버전 관리합니다. 지도를 새로 만들면 YAML의 `origin`이 달라질 수 있고, 그러면 그 지도 기준으로 적어 둔 목표 좌표(10장, 13장의 웨이포인트)도 다시 확인해야 합니다.
+- 센서 데이터는 bag으로 남겨 두는 습관을 들입니다. 같은 bag으로 파라미터만 바꿔 다시 돌릴 수 있어서, 결과가 나빠졌을 때 원인이 데이터인지 설정인지 가를 수 있습니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -573,3 +713,4 @@ bag은 메시지마다 recorder가 받은 시각을 저장하고, `ros2 bag play
   - Gazebo, rviz2를 띄우는 실습 9-4, 9-5, 9-6의 rviz2 부분 전체 (GUI). 특히 slam_toolbox가 실제로 만든 지도 모양, `view_frames` PDF 내용, 실시간 `/tf` publisher 목록, bag 재생으로 만든 지도의 품질.
   - 9-4의 `ros2 bag record --use-sim-time` 동작과, 이 옵션 없이 기록한 시뮬 bag이 slam_toolbox에 주는 실제 증상.
   - 4절 표 중 `/tf_static` 누락, Gazebo와 bag `/clock` 동시 발행, `negate: 1`, 잘못된 `yaml_filename`, slam_toolbox 종료 실험의 실제 출력.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
