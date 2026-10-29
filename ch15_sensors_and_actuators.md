@@ -8,10 +8,17 @@
 
 장치의 세부 사항(단위, 레지스터, 통신 방식)은 드라이버 노드 안에만 있고, 바깥에는 표준 메시지 타입만 보입니다.
 
+```mermaid
+flowchart LR
+  sonar[("FakeSonar<br/>fake_hardware.py")] -.->|"read_mm, 콜백"| sd("sonar_driver")
+  sd -->|"sensor_msgs/Range"| range["/range"]
+  range --> rviz("rviz2 같은 다른 노드")
+  cmd["/servo/command"] -->|"Float64"| svd("servo_driver")
+  svd -->|"JointState"| js["/servo/joint_states"]
+  svd -.->|"서비스 제공"| light{{"/servo/light 서비스"}}
+  svd -.->|"write_goal, read_position"| servo[("FakePanServo<br/>fake_hardware.py")]
 ```
-[장치 또는 가짜 장치] --파이썬 함수 호출--> [드라이버 노드] --sensor_msgs/Range--> /range
-/servo/command (Float64) --> [servo_driver] --> /servo/joint_states (JointState), 서비스 /servo/light (SetBool)
-```
+원통으로 그린 `fake_hardware.py`의 두 클래스는 ROS를 모르는 일반 파이썬 클래스이고, 단위 변환과 ROS 메시지 만들기는 모두 드라이버 노드 쪽에서 합니다.
 
 ## 1. 목표와 개념
 
@@ -25,6 +32,104 @@
 비유: 드라이버 노드는 외국어만 하는 장치 옆에 앉은 통역사이고, 회의실(ROS 그래프)에는 통역된 공용어(표준 메시지)만 들립니다.
 
 이 가이드에는 실물 장치가 없으므로, 잡음이 섞인 가짜 초음파 거리 센서, WSL에서 실제로 읽을 수 있는 CPU 사용률(`/proc/stat`), 가짜 팬(pan) 서보 모터를 씁니다.
+
+### 장치 값이 표준 메시지가 되기까지
+
+드라이버 노드의 일은 크게 세 가지입니다. 장치 단위를 SI 단위로 바꾸고(REP 103: 길이는 m, 각도는 rad), 측정 시각과 `frame_id`를 header에 채우고, 장치 사양을 메시지에 함께 싣습니다.
+
+예: 15-3의 `make_range_msg`에서 장치 단위(mm 정수)가 ROS 단위(m 실수)로 바뀌고 header가 채워집니다.
+
+```python
+msg.header.stamp = stamp
+msg.header.frame_id = frame_id
+msg.range = distance_mm / 1000.0
+```
+
+단위 변환이 이 함수 한 곳에만 있어서 두 드라이버(15-3, 15-4)가 같은 변환을 씁니다. `Range.msg`의 주석에도 header 시각은 센서가 거리를 돌려준 시각이라고 적혀 있습니다.
+
+센서를 내보내는 방법은 장치가 값을 주는 방식에 따라 갈립니다. 일정 주기로 읽으면(설계 1) 타이머 주기대로 발행되고, 장치가 불규칙하게 밀어 주는 값은 최신 값만 저장해 두고 타이머가 발행하면(설계 3) 그 간격도 일정하게 만들 수 있습니다.
+
+예: 15-3(설계 1)에서는 타이머 콜백이 장치를 읽고 바로 발행합니다.
+
+```python
+self.timer = self.create_timer(period, self.on_timer)
+```
+
+예: 15-4(설계 3)에서는 장치 스레드가 값을 저장하고, 타이머 콜백이 그 값을 복사해 발행합니다. 두 스레드가 같은 변수를 만지므로 lock으로 보호합니다.
+
+```python
+with self.lock:
+    self.latest_mm = distance_mm
+    self.latest_stamp = stamp
+```
+
+```mermaid
+sequenceDiagram
+  participant d as 장치 스레드
+  participant v as latest_mm, latest_stamp
+  participant t as 타이머 콜백
+  participant r as /range
+  d->>v: 0.05~0.5초 간격으로 값과 시각 저장
+  t->>v: 0.1초마다 값과 시각 복사
+  t->>r: Range 발행
+  d->>v: 새 값 저장
+  t->>v: 0.1초 뒤 복사
+  t->>r: Range 발행
+```
+
+그림에서 볼 것: 장치 쪽 화살표의 간격은 들쭉날쭉하지만 `/range` 쪽 화살표는 0.1초마다 한 번씩입니다. 저장 변수가 두 스레드 사이의 완충 역할을 합니다.
+
+액추에이터 쪽은 명령의 성격에 따라 인터페이스를 고릅니다. 15-6의 `servo_driver`는 세 가지를 한 노드에 모았습니다.
+
+예:
+
+```python
+self.cmd_sub = self.create_subscription(Float64, 'servo/command', self.on_command, 10)
+self.state_pub = self.create_publisher(JointState, 'servo/joint_states', 10)
+self.light_srv = self.create_service(SetBool, 'servo/light', self.on_light)
+```
+
+목표 각도는 토픽, 현재 상태는 `JointState` 토픽, 켜기/끄기는 서비스입니다. 밖에서는 라디안만 보이고, 틱으로 바꾸는 곳은 한 줄입니다.
+
+```python
+ticks = FakePanServo.CENTER + round(target * TICKS_PER_RAD)
+```
+
+### 코드와 폴더 구조
+
+이 장은 `sensors_actuators` 패키지(ament_python)를 만듭니다. 패키지 기본 파일은 2장에서 설명했으므로, 여기서는 이 장의 파일과 역할 분담만 적습니다.
+
+```text
+~/rosbook_ws/src/sensors_actuators/
+├── package.xml            # 의존성: sensor_msgs, std_msgs, std_srvs, diagnostic_msgs (15-1)
+├── setup.py               # console_scripts 4개 등록 (15-3)
+└── sensors_actuators/
+    ├── fake_hardware.py       # ROS를 import 하지 않는 가짜 장치: FakeSonar, FakePanServo (15-2)
+    ├── sonar_driver.py        # 설계 1 드라이버와 make_range_msg (15-3)
+    ├── sonar_stream_driver.py # 설계 3 드라이버, make_range_msg를 다시 씀 (15-4)
+    ├── cpu_monitor.py         # /proc/stat을 읽어 DiagnosticArray 발행 (15-5)
+    └── servo_driver.py        # 명령 토픽, JointState 토픽, SetBool 서비스 (15-6)
+```
+
+빌드하면 실행 파일 네 개가 `install/sensors_actuators/lib/sensors_actuators/`에 놓입니다. `ros2 run sensors_actuators sonar_driver`가 이 위치를 찾습니다.
+
+```mermaid
+flowchart TB
+  fh[("fake_hardware.py<br/>장치 단위, ROS 없음")]
+  sd("sonar_driver.py<br/>make_range_msg") -.->|"import"| fh
+  ssd("sonar_stream_driver.py") -.->|"import"| fh
+  ssd -.->|"import make_range_msg"| sd
+  svd("servo_driver.py") -.->|"import"| fh
+```
+
+그림에서 볼 것: 장치 코드와 ROS 코드가 파일 단위로 나뉘어 있어, `fake_hardware.py`를 실제 장치 라이브러리로 바꿔도 드라이버 파일의 ROS 부분은 거의 그대로 둘 수 있습니다. 이 장의 노드는 기본 뼈대에 장치 객체를 `__init__`에서 만들고, 장치 콜백을 쓰는 노드(`sonar_stream_driver`)만 `destroy_node`를 확장해 장치 스트림을 닫는 점이 더해집니다.
+
+### 실무 메모
+
+- 메시지 타입은 의미에 맞는 표준을 먼저 찾습니다(`sensor_msgs/Range`, `JointState`, `diagnostic_msgs`). 그러면 rviz2의 `Range` 디스플레이처럼 기존 도구가 이 드라이버가 가짜인지 진짜인지 모른 채 그대로 붙습니다(15-8).
+- 단위는 SI로 내보냅니다(REP 103). 장치 고유 단위(mm, 틱)는 드라이버 안에서 끝냅니다.
+- `header.stamp`는 발행 시각이 아니라 측정 시각을 넣고, `frame_id`는 센서가 로봇에 붙은 자리를 뜻하는 이름이므로 파라미터로 둡니다. tf 트리에 그 이름의 프레임이 있어야 다른 노드가 좌표를 변환할 수 있습니다.
+- 설치마다 달라지는 값은 파라미터로 둡니다(`frame_id`, `rate`, `limit`). 장치 사양인 측정 한계와 시야각은 메시지 필드(`min_range`, `max_range`, `field_of_view`)에 실어 보내서, 받는 쪽이 장치 모델을 몰라도 값을 해석하게 합니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -730,3 +835,4 @@ Range 디스플레이가 오류 상태가 되고, `sonar_link`에서 `map`으로
 - 확인 못 함:
   - 15-8의 rviz2 화면(GUI), 4절 넷째 줄의 rviz2 표시.
   - 4절 셋째 줄(lock 제거)의 증상은 재현을 시도하지 않았습니다.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
