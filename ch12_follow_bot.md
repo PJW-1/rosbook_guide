@@ -6,11 +6,19 @@
 
 ## 이 장에서 체감할 구조
 
+```mermaid
+flowchart LR
+  cam[("Gazebo 카메라")] -->|"gz 토픽"| ib("image_bridge")
+  ib -->|"sensor_msgs/msg/Image"| img["/camera/image_raw"]
+  img --> lf("line_finder")
+  img --> fp("follower_p")
+  lf --> mask["/follower/mask"]
+  lf --> dbg["/follower/debug_image"]
+  fp -->|"TwistStamped"| cmd["/cmd_vel"]
+  cmd --> pb("parameter_bridge")
+  pb -->|"gz 토픽"| dd[("Gazebo DiffDrive")]
 ```
-Gazebo 카메라 ─(gz)─> image_bridge ─/camera/image_raw (sensor_msgs/msg/Image)─┬─> line_finder ─> /follower/mask, /follower/debug_image
-                                                                              └─> follower_p ─/cmd_vel (TwistStamped)─> parameter_bridge ─> Gazebo DiffDrive
-```
-카메라 이미지도 결국 하나의 토픽이고, 영상 처리 노드는 "이미지 토픽을 받아 속도 토픽을 내보내는" 평범한 노드입니다. 센서 데이터에는 보통 QoS를 `qos_profile_sensor_data`로 맞춥니다.
+`line_finder`는 눈으로 확인하기 위한 결과를 내고, `follower_p`는 같은 이미지를 따로 받아 속도 명령을 냅니다. 카메라 이미지도 결국 하나의 토픽이고, 영상 처리 노드는 "이미지 토픽을 받아 속도 토픽을 내보내는" 평범한 노드입니다. 센서 데이터에는 보통 QoS를 `qos_profile_sensor_data`로 맞춥니다.
 
 ## 1. 목표와 개념
 
@@ -23,6 +31,98 @@ Gazebo 카메라 ─(gz)─> image_bridge ─/camera/image_raw (sensor_msgs/msg/
 - **비례 제어(P 제어)**: 오차(선의 x 위치와 화면 중앙의 차이)에 상수를 곱한 값을 회전 속도로 씁니다.
 
 비유: 운전자가 차선의 가운데를 보고 핸들을 오차만큼만 꺾는 것과 같습니다.
+
+### 이미지 한 장이 속도 명령이 되기까지
+
+콜백은 이미지가 올 때마다 아래 순서를 한 번 거칩니다. 위 목록의 개념이 차례로 등장합니다.
+
+```mermaid
+flowchart LR
+  msg["Image 메시지<br/>rgb8, 640x480"] -->|"imgmsg_to_cv2"| bgr["BGR 배열"]
+  bgr -->|"cvtColor"| hsv["HSV 배열"]
+  hsv -->|"inRange"| mask["마스크<br/>선은 255"]
+  mask -->|"아래쪽 띠만 남기고 moments"| ctr["무게중심 x, y"]
+  ctr -->|"x에서 화면 중앙을 뺌"| err["오차 err"]
+  err -->|"kp를 곱하고 부호를 뒤집음"| w["angular.z"]
+```
+
+그림에서 볼 것: 이미지는 변환을 거칠수록 숫자 하나(`angular.z`)로 줄어듭니다. 앞의 세 단계는 영상 처리이고, 마지막 두 단계만 제어입니다.
+
+예: 이미지 메시지의 필드는 12-2의 로그 한 줄로 그대로 읽을 수 있습니다.
+
+```python
+f'image #{self.count}: {msg.width}x{msg.height} '
+f'encoding={msg.encoding} step={msg.step} '
+f'bytes={len(msg.data)}'
+```
+
+`step`은 640 픽셀 x 3 바이트인 1920이고, `data`의 길이는 `step * height`인 921600 바이트입니다. 한 장이 약 0.9 MB이므로 30 Hz면 초당 약 27 MB가 오갑니다.
+
+예: 12-5의 `line_finder`는 메시지를 OpenCV 배열로 바꾸며 시작합니다.
+
+```python
+image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+```
+
+시뮬 카메라는 `rgb8`을 보내지만 OpenCV 함수는 B, G, R 순서를 기대하므로 받을 때 순서를 맞춥니다.
+
+예: 12-3의 `vision.py`가 색을 고르는 부분입니다.
+
+```python
+hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+return cv2.inRange(hsv, lower, upper)
+```
+
+노랑 `(0, 255, 255)`(BGR)는 HSV로 `[30 255 255]`가 되어, 기본 범위 `[20, 100, 100]`~`[40, 255, 255]` 안에 듭니다.
+
+예: 12-6의 `follower_p`가 오차를 회전 속도로 바꾸는 두 줄입니다.
+
+```python
+err = center[0] - mask.shape[1] / 2
+cmd.twist.angular.z = -self.get_parameter('kp').value * err
+```
+
+선이 오른쪽에 있으면 `err`가 양수이고, 부호를 뒤집은 `angular.z`는 음수(오른쪽 회전)가 됩니다. `kp=0.005`에서 오차 100 픽셀은 0.5 rad/s입니다.
+
+### 코드와 폴더 구조
+
+이 장은 `follow_bot` 패키지(ament_python)를 만듭니다. 패키지 기본 구조와 `data_files`로 launch 파일을 설치하는 방법은 2장에서 설명했으므로, 여기서는 이 장에서 더해지는 것만 적습니다.
+
+```text
+~/rosbook_ws/src/follow_bot/
+├── package.xml            # 의존성: cv_bridge, sensor_msgs, geometry_msgs (12-2, 12-4)
+├── setup.py               # console_scripts 4개와 launch/, worlds/ 설치 (12-2~12-6)
+├── setup.cfg, resource/   # ros2 pkg create가 만든 그대로
+├── follow_bot/
+│   ├── vision.py          # ROS를 모르는 순수 함수: color_mask, line_center (12-3)
+│   ├── check_vision.py    # vision.py를 합성 이미지로 시험하는 스크립트 (12-3)
+│   ├── follower.py        # 이미지 메시지 필드만 로그로 찍는 구독 노드 (12-2)
+│   ├── line_finder.py     # 선 검출 결과를 마스크와 디버그 이미지 토픽으로 발행 (12-5)
+│   └── follower_p.py      # 선 검출 + 비례 제어로 /cmd_vel 발행 (12-6)
+├── launch/course.launch.py  # Gazebo, robot_state_publisher, 로봇 생성을 include (12-4)
+└── worlds/course.sdf        # 노란 팔각형 선이 있는 월드 (12-4)
+```
+
+빌드하면 `launch/`와 `worlds/`의 파일은 `install/follow_bot/share/follow_bot/launch/`와 `.../worlds/`에 놓이고(`--symlink-install`이면 `src/`를 가리키는 링크), 실행 파일 네 개는 `install/follow_bot/lib/follow_bot/`에 놓입니다.
+
+세 노드가 `vision.py`를 함께 쓰는 구조입니다.
+
+```mermaid
+flowchart TB
+  vision[("vision.py<br/>color_mask, line_center")]
+  lf("line_finder<br/>결과를 보여 줌") -.->|"import"| vision
+  fp("follower_p<br/>속도를 냄") -.->|"import"| vision
+  cv("check_vision<br/>합성 이미지로 시험") -.->|"import"| vision
+```
+
+그림에서 볼 것: 영상 처리 함수는 ROS 코드가 아니므로 시뮬 없이 시험할 수 있습니다(12-3). `line_finder`와 `follower_p`는 서로 메시지를 주고받지 않고, 같은 카메라 토픽을 각자 구독해 같은 함수를 부릅니다. 그래서 `line_finder`를 껐다 켜도 주행에는 영향이 없습니다. 노드 뼈대는 이 가이드의 기본 형태 그대로이고, 이 장에서 눈에 띄는 차이는 구독 QoS를 `qos_profile_sensor_data`로 두는 것과 콜백 안에서 `get_parameter`를 매번 읽어 실행 중 파라미터 변경이 바로 반영되는 것입니다.
+
+### 실무 메모
+
+- 이미지 토픽은 크기가 큽니다(위의 계산). 같은 컴퓨터 안의 처리 노드는 원본(`/camera/image_raw`)을 구독하고, 네트워크 너머에서 눈으로 볼 때는 `image_transport` 압축 토픽(`/camera/image_raw/compressed`가 있을 때)을 고려합니다. 대역폭은 `ros2 topic bw`로 비교합니다.
+- 센서 토픽은 `qos_profile_sensor_data`(best effort)로 구독하는 것이 일반적입니다. 발행 쪽과 QoS가 맞지 않으면 아무 로그 없이 데이터가 오지 않으므로, 안 보이면 `ros2 topic info -v`부터 확인합니다(4절 첫 항목).
+- 처리 결과는 `cv2.imshow` 대신 디버그 이미지 토픽으로 내보내고 `rqt_image_view`로 봅니다. 이때 `header=msg.header`로 원본의 시각과 프레임을 이어 붙이는 습관을 들입니다.
+- HSV 범위와 `kp`, `speed` 같은 임계값은 코드에 박지 않고 파라미터로 둡니다. 조명이나 월드가 바뀔 때 `ros2 param set`으로 실행 중에 조정합니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -785,3 +885,4 @@ ros2 param set /follower_p speed 0.0
   - `rqt_image_view`, `rqt_graph` 화면(확인 못 함(GUI)).
   - 시뮬 카메라의 실제 encoding(`rgb8`으로 예상)과 `image_bridge`가 압축 토픽을 함께 내는지.
   - `ros2 launch ... --show-args` 출력 전체.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
