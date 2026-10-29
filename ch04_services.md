@@ -8,10 +8,15 @@
 
 서비스는 이름(`/word_count`)과 타입(`basics_interfaces/srv/WordCount`)이 둘 다 맞아야 연결되는 요청-응답 통로입니다. 서버가 없으면 클라이언트는 기다릴 수밖에 없고, 응답은 executor가 돌아야 손에 들어옵니다.
 
+```mermaid
+flowchart LR
+  client("service_client 노드") -->|"요청: words"| wc{{"/word_count 서비스<br/>basics_interfaces/srv/WordCount"}}
+  wc --> server("service_server 노드<br/>count_words 콜백")
+  server -->|"응답: count"| wc
+  wc --> client
 ```
-service_client ──요청 {words}──▶ /word_count ──▶ service_server
-               ◀──응답 {count}──              ◀── count_words() 콜백
-```
+
+그림에서 볼 것: 클라이언트와 서버 사이에는 서비스 이름과 타입 하나만 있습니다. 둘 중 하나라도 다르면 요청이 서버에 닿지 않습니다.
 
 ## 1. 목표와 개념
 
@@ -21,11 +26,121 @@ service_client ──요청 {words}──▶ /word_count ──▶ service_serve
 - **서비스 클라이언트**: 같은 이름과 타입으로 요청을 보내고 응답을 받습니다.
 - **서비스 타입(.srv)**: 요청 필드와 응답 필드를 `---` 한 줄로 나눠 적은 정의 파일입니다. 빌드하면 `WordCount.Request`와 `WordCount.Response` 두 메시지 클래스가 생깁니다.
 
+예:
+
+```python
+self.srv = self.create_service(WordCount, 'word_count', self.count_words)
+client = node.create_client(WordCount, 'word_count')
+```
+
+첫 줄은 서버(실습 4-2), 둘째 줄은 클라이언트(실습 4-4)입니다. 두 줄의 타입(`WordCount`)과 이름(`'word_count'`)이 같아야 연결됩니다.
+
+```mermaid
+flowchart LR
+  srv[("srv/WordCount.srv")] -->|"colcon build"| gen[("생성된 Python 코드<br/>_word_count.py")]
+  gen --> req[("WordCount.Request<br/>string words")]
+  gen --> res[("WordCount.Response<br/>uint32 count")]
+```
+
+그림에서 볼 것: `.srv` 파일 하나가 메시지 타입 두 개로 나뉩니다. `---` 위가 `Request`, 아래가 `Response`입니다. 3장의 `.msg`와 같은 rosidl 생성 과정을 거칩니다.
+
+예:
+
+```python
+request = WordCount.Request()
+response.count = len(request.words.split())
+```
+
+클라이언트는 `Request`를 직접 만들어 채우고(실습 4-4), 서버는 rclpy가 만들어 준 `Response`에 값만 채웁니다(실습 4-2).
+
+**요청에서 응답까지의 순서.** 클라이언트는 서버가 보일 때까지 기다린 뒤 요청을 보냅니다. `call_async()`는 응답을 기다리지 않고 곧바로 future(나중에 응답이 담길 상자)를 돌려줍니다. 응답이 도착해서 future에 담기는 것은 클라이언트 쪽 executor가 돌 때입니다.
+
+```mermaid
+sequenceDiagram
+  participant c as service_client 노드
+  participant s as service_server 노드
+  c->>c: wait_for_service(timeout_sec=1.0)
+  c->>s: call_async(request) 요청 words
+  Note over c: 빈 future를 바로 받음
+  s->>s: count_words(request, response)
+  s-->>c: 응답 count
+  Note over c: spin_until_future_complete가<br/>응답을 future에 담음
+  c->>c: future.result().count 출력
+```
+
+그림에서 볼 것: 요청을 보낸 시점과 응답을 꺼내는 시점이 떨어져 있습니다. 그 사이에 executor가 돌아야 응답이 future에 들어옵니다.
+
+예:
+
+```python
+future = client.call_async(request)
+rclpy.spin_until_future_complete(node, future)
+response = future.result()
+```
+
+실습 4-4의 세 줄입니다. 가운데 줄이 executor를 돌리는 부분이고, 이 줄을 지우면 `future.result()`가 `None`입니다(4절).
+
+**콜백 안에서 기다리면 멈춥니다.** executor가 스레드 하나로 콜백을 차례로 실행하는 동안, 한 콜백 안에서 동기 `call()`로 응답을 기다리면 응답을 받아 줄 스레드가 남지 않습니다. 실습 4-5에서 직접 겪습니다.
+
+```mermaid
+sequenceDiagram
+  participant e as periodic_client의 executor 스레드
+  participant s as service_server 노드
+  e->>e: on_timer 콜백 시작
+  e->>s: call(request) 요청
+  s-->>e: 응답 도착
+  Note over e: on_timer가 call()에서 기다리는 중이라<br/>응답을 future에 담을 차례가 오지 않음
+```
+
+그림에서 볼 것: 서버는 응답을 보냈지만 클라이언트의 유일한 스레드가 자기 자신을 기다리고 있습니다. 콜백 안에서는 `call_async()`와 `add_done_callback()`을 씁니다.
+
+예:
+
+```python
+future = self.client.call_async(request)
+future.add_done_callback(self.on_response)
+```
+
+실습 4-5의 두 줄입니다. 콜백은 요청만 보내고 바로 끝나고, 응답은 executor가 `on_response`를 불러서 넘겨줍니다.
+
 서비스는 금방 끝나는 일에 맞습니다. 끝나는 시간을 알 수 없거나, 중간 진행 상황을 알려 줘야 하거나, 도중에 취소할 수 있어야 하는 일은 5장의 액션을 씁니다.
 
 비유: 토픽은 게시판에 글을 붙여 두는 것이고, 서비스는 담당자 창구에 서류를 내고 그 자리에서 답을 받는 것입니다.
 
 이 장은 원서와 같은 예제, 즉 문자열을 받아 단어 수를 돌려주는 `word_count` 서비스를 ROS 2로 만듭니다. 원서의 전체 흐름은 PDF p.71~79에 있습니다.
+
+### 코드와 폴더 구조
+
+3장의 두 패키지에 서비스 정의 하나와 실행 파일 세 개가 더해집니다. 3장에서 만든 파일은 `...`로 줄였습니다.
+
+```text
+~/rosbook_ws/src/
+├── basics_interfaces/
+│   ├── CMakeLists.txt        "srv/WordCount.srv" 한 줄 추가 (실습 4-1)
+│   ├── package.xml           바꾸지 않음
+│   ├── msg/Complex.msg       3장
+│   └── srv/
+│       └── WordCount.srv     요청 words, 응답 count (실습 4-1)
+└── basics/
+    ├── package.xml           바꾸지 않음
+    ├── setup.py              console_scripts에 세 줄 추가
+    └── basics/
+        ├── ...               3장의 노드들
+        ├── service_server.py   /word_count 서버 (실습 4-2)
+        ├── service_client.py   한 번 부르고 끝나는 클라이언트 (실습 4-4)
+        └── periodic_client.py  타이머 콜백 안에서 부르는 클라이언트 (실습 4-5)
+```
+
+- 빌드 뒤 `WordCount.srv`는 `~/rosbook_ws/install/basics_interfaces/share/basics_interfaces/srv/`에, 생성된 Python 코드는 3장의 `msg/`와 나란히 `.../site-packages/basics_interfaces/srv/_word_count.py`에 놓입니다.
+- 노드 뼈대는 3장과 같습니다. 서버는 `__init__`에서 `create_service()`를 부르고, 콜백이 `(request, response)`를 받아 `response`를 반환한다는 점만 다릅니다.
+- `service_client`는 한 번 부르고 끝나는 프로그램이라 `Node`를 상속하지 않고 `main()` 안에서 노드를 만듭니다. `periodic_client`는 계속 도는 노드라서 3장과 같은 클래스 형태를 씁니다.
+
+### 실무 메모
+
+- 서비스는 금방 끝나는 조회와 설정(값 읽기, 모드 바꾸기, 초기화 요청)에 씁니다. 몇 초 이상 걸리거나 진행 상황과 취소가 필요한 일은 5장의 액션으로 만듭니다.
+- 기다림에는 끝을 둡니다. `wait_for_service(timeout_sec=...)`처럼 시간을 정하고, 기다리는 동안 무엇을 기다리는지 로그로 남기면 이름 오타를 빨리 찾습니다. 기다림이 길어지면 먼저 `ros2 service list -t`로 이름과 타입을 확인합니다.
+- 콜백 안에서는 동기 `call()`을 쓰지 않습니다. Jazzy rclpy의 `Client.call()` 설명에도 콜백 안에서 부르면 교착이나 시간 초과가 날 수 있다는 경고가 있습니다.
+- 실패는 응답 필드로 알립니다. 표준 타입 `std_srvs/srv/Trigger`의 응답이 `bool success`와 `string message`인 것처럼, 직접 만드는 서비스에도 성공 여부와 이유를 담는 필드를 두는 경우가 많습니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -502,3 +617,4 @@ rclpy는 콜백의 반환값을 응답으로 보냅니다. `None`이 돌아오�
   - 기본 RMW(Fast DDS)에서의 동작. 이 WSL 환경에서는 Fast DDS로 프로세스 사이 통신이 되지 않아서 Cyclone DDS로만 검증했습니다.
   - 학습자의 실제 `~/rosbook_ws`에서의 빌드. 3장 담당자가 만든 `basics`와 `basics_interfaces`의 실제 내용은 보지 않았고, CONVENTIONS 5절의 형태를 같은 모양으로 직접 만들어 검증했습니다.
   - 서비스 콜백이 `None`을 반환할 때의 정확한 오류 문구 (Q2).
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
