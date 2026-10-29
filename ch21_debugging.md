@@ -10,6 +10,20 @@ ROS 2의 로그는 각 노드가 화면, 로그 파일, `/rosout` 토픽 세 곳
 연결 문제는 "이름, 타입, QoS, 도메인" 네 가지가 모두 맞아야 이어진다는 규칙으로 좁혀 갑니다.
 bag은 토픽을 그대로 저장했다가 다시 발행하므로, 받는 노드 입장에서는 실제 센서와 구별되지 않습니다.
 
+```mermaid
+flowchart LR
+  bm("battery_monitor 노드") -->|"로그"| screen[("터미널 화면")]
+  bm -->|"로그"| logdir[("~/.ros/log")]
+  bm -->|"rcl_interfaces/Log"| rosout["/rosout"]
+  rosout --> rc("rqt_console")
+  rosout --> echo("ros2 topic echo")
+  sw("sine_wave 노드") -->|"std_msgs/Float64"| sin["/sin"]
+  sin --> rec("ros2 bag record")
+  rec --> bagdir[("wave_bag 폴더")]
+```
+
+그림에서 볼 것: 위쪽 가지는 한 번의 `get_logger()` 호출이 세 곳으로 나가고, 그중 `/rosout`만 토픽이라서 구독하는 도구라면 무엇이든 같은 로그를 받을 수 있다는 것입니다. 아래쪽 가지는 bag이 토픽 하나를 구독자처럼 받아 폴더에 쌓는 모습입니다.
+
 ## 1. 목표와 개념
 
 로봇이 움직이지 않을 때 무엇부터 봐야 하는지, 순서를 몸에 익히는 것이 이 장의 목표입니다 (원서 PDF p.395~396).
@@ -19,6 +33,32 @@ bag은 토픽을 그대로 저장했다가 다시 발행하므로, 받는 노드
 3. **데이터를 봅니다.** 이어져 있다면 흐르는 값이 맞는지 그림(rviz2)과 그래프(rqt_plot)로 확인합니다.
 4. **기록하고 다시 틉니다.** 문제가 난 순간의 데이터를 bag으로 저장해 두면 같은 상황을 몇 번이고 재현할 수 있습니다.
 
+이 순서를 증상에서 원인으로 좁혀 가는 흐름으로 그리면 다음과 같습니다. 각 칸에 적은 명령은 이 장의 실습에서 모두 씁니다.
+
+```mermaid
+flowchart TB
+  s["증상: 로봇이 안 움직임"] --> l["로그에서 경고와 오류 확인"]
+  l --> n{"노드가 떠 있나<br/>ros2 node list"}
+  n -->|"아니오"| fixn["노드 실행 또는 launch 확인"]
+  n -->|"예"| c{"발행자와 구독자 수가 모두 1 이상인가<br/>ros2 topic info /이름"}
+  c -->|"아니오"| names["토픽 이름 오타, 노드 종료,<br/>ROS_DOMAIN_ID 확인"]
+  c -->|"예"| t{"타입과 QoS가 서로 맞나<br/>ros2 topic info -v /이름"}
+  t -->|"아니오"| tfix["발행자 또는 구독자의 타입, QoS를 맞춤"]
+  t -->|"예"| d{"메시지가 실제로 오나<br/>ros2 topic hz /이름"}
+  d -->|"아니오"| nodata["발행 쪽 로그와 use_sim_time, /clock 확인"]
+  d -->|"예"| v["값이 맞나: rqt_plot, rviz2의 Fixed Frame과 TF"]
+```
+
+그림에서 볼 것: 로그를 먼저 보고, 그다음부터는 "이어졌나, 같은 규격인가, 데이터가 오나, 값이 맞나" 순서로 한 칸씩 좁힙니다. 이름이 틀리면(실습 21-3) 개수가 0이고, 타입이 틀리면(실습 21-4) 개수는 1 이상이지만 `-v`에서 타입이 다르게 보입니다. 그래서 개수 확인과 `-v` 확인이 서로 다른 칸입니다.
+
+예:
+
+```bash
+ros2 topic info /countr
+```
+
+실습 21-3에서 `Publisher count: 0`, `Subscription count: 1`이 나옵니다. 한쪽이 0이면 로그에 아무것도 없어도 이름부터 의심합니다.
+
 몇 가지 용어를 먼저 정리합니다.
 
 - **로그 심각도(severity)**: DEBUG, INFO, WARN, ERROR, FATAL 다섯 단계입니다. 노드마다 "이 단계 이상만 출력한다"는 **로그 레벨**이 있고 기본값은 INFO입니다.
@@ -27,6 +67,78 @@ bag은 토픽을 그대로 저장했다가 다시 발행하므로, 받는 노드
 - **bag**: 토픽 메시지를 시간과 함께 저장한 파일 묶음입니다. Jazzy의 기본 저장 형식은 MCAP입니다.
 
 비유: 로그는 각 부서가 쓰는 업무 일지이고, `/rosout` 은 그 일지를 한 곳에 모아 보는 게시판입니다. bag은 회의를 통째로 녹화해 두었다가 나중에 다시 트는 녹화 파일입니다.
+
+**로그가 지나가는 길.** 노드 코드에서 `self.get_logger().info(...)`를 한 번 부르면 로그 한 건이 화면, 로그 파일, `/rosout` 토픽으로 동시에 나갑니다. 로거는 먼저 심각도를 노드(또는 로거)의 로그 레벨과 비교하고, 레벨보다 낮은 로그는 세 곳 어디에도 내지 않습니다. 그래서 레벨은 코드가 아니라 실행 인자로 바꿀 수 있어야 쓸모가 있습니다.
+
+예:
+
+```python
+log = self.get_logger()
+log.debug(f'raw reading: {self.voltage:.2f} V')
+```
+
+```bash
+ros2 run basics battery_monitor --ros-args --log-level battery_monitor:=debug
+```
+
+기본 레벨 INFO에서는 `log.debug` 줄이 출력되지 않고, 두 번째 명령처럼 `battery_monitor` 로거만 DEBUG로 낮추면 같은 줄이 나타납니다. `print()`는 로거를 거치지 않으므로 이 흐름 어디에도 들어가지 않고, 노드를 실행한 터미널의 표준 출력으로만 갑니다(5절 Q1).
+
+로그 한 건은 `/rosout`에서 `rcl_interfaces/msg/Log` 메시지가 됩니다. 시각, 심각도(`level`), 로거 이름(`name`), 내용(`msg`)에 더해 로그를 남긴 파일과 함수와 줄 번호까지 담깁니다.
+
+예:
+
+```bash
+ros2 topic echo /rosout --field msg
+```
+
+모든 노드의 로그가 한 토픽에 모이므로, 노드가 여럿이어도 터미널 하나에서 `--field msg`로 내용만 이어서 볼 수 있습니다.
+
+**bag의 기록과 재생.** `ros2 bag record`는 지정한 토픽의 구독자가 되어 메시지를 도착 시각과 함께 폴더에 저장합니다. `ros2 bag play`는 그 폴더에서 메시지를 읽어 같은 토픽 이름과 같은 타입으로 다시 발행합니다. 받는 노드는 발행자가 실제 센서인지 bag인지 알 수 없습니다.
+
+```mermaid
+flowchart LR
+  sw("sine_wave 노드") -->|"std_msgs/Float64"| sin["/sin"]
+  sin --> rec("ros2 bag record")
+  rec --> bag[("wave_bag 폴더")]
+  bag --> play("ros2 bag play")
+  play -->|"같은 이름과 타입으로 재발행"| sin
+  sin --> echo("ros2 topic echo")
+```
+
+그림에서 볼 것: 기록할 때는 `sine_wave`가 `/sin`의 발행자이고, 재생할 때는 `sine_wave`를 끄고 `ros2 bag play`가 발행자 자리를 차지합니다(실습 21-7). `ros2 topic echo` 쪽은 달라진 것이 없습니다.
+
+예:
+
+```bash
+ros2 bag record -o wave_bag --topics /sin /cos
+ros2 bag play wave_bag
+```
+
+`-o wave_bag`은 결과를 담을 폴더 이름이고, 재생은 기록한 시간 간격을 그대로 따릅니다.
+
+### 코드와 폴더 구조
+
+이 장은 `basics` 패키지에 노드 두 개를 더합니다. 3장의 구조에서 달라지는 것은 `console_scripts`에 줄이 늘어난 것뿐이고, 20장의 `launch/`와 `test/`는 그대로입니다.
+
+```text
+~/rosbook_ws/src/basics/
+├── setup.py                         # console_scripts에 battery_monitor, sine_wave 추가 (21-1)
+└── basics/
+    ├── battery_monitor.py           # 로그 심각도와 레벨, 로거 서비스 (21-1)
+    └── sine_wave.py                 # 값을 그래프와 bag으로 보기 위한 발행 노드 (21-5)
+```
+
+- 설치 위치: 빌드하면 두 실행 파일이 `~/rosbook_ws/install/basics/lib/basics/battery_monitor`와 `.../sine_wave`로 만들어지고, `ros2 run basics battery_monitor`가 그것을 실행합니다.
+- 실행하면서 생기는 것은 소스 폴더 밖에 있습니다. 로그 파일은 `~/.ros/log/`, bag은 `ros2 bag record -o`로 정한 폴더(실습에서는 `~/wave_bag`, 안에 `metadata.yaml`과 `.mcap` 파일), `read_bag.py`와 `wave.csv`는 홈 디렉터리입니다. 저장소에 넣을 파일과 실행 결과를 섞지 않도록 위치를 구분해 둡니다.
+- 코드 뼈대의 차이: `battery_monitor`는 기본 형태의 `super().__init__()`에 `enable_logger_service=True`를 더해 로거 레벨을 묻고 바꾸는 서비스를 엽니다. `sine_wave`는 파라미터 하나(`function`)로 같은 코드가 사인과 코사인을 모두 내게 해서, 노드 이름과 토픽 이름과 파라미터를 실행 인자로 바꿔 두 벌 띄웁니다.
+
+### 실무 메모
+
+- **`print()` 대신 logger를 씁니다.** 로봇에서는 노드를 launch로 띄워 두고 터미널을 보지 않는 경우가 많습니다. logger 출력은 로그 파일과 `/rosout`에도 남으므로 나중에 확인할 수 있고, 레벨로 양을 조절할 수 있습니다. 평소에 자세한 값은 `debug`로 남겨 두면 비용이 거의 없습니다.
+- **로그 레벨은 실행 인자로 바꿉니다.** 코드를 고치지 않고 `--log-level 로거이름:=debug`로 문제의 노드만 낮추는 습관을 둡니다. 로거 이름 없이 `--log-level debug`만 주면 ROS 내부 라이브러리의 로그까지 쏟아집니다.
+- **연결 문제는 `ros2 doctor --report`와 `ros2 topic info -v`로 먼저 확인합니다.** 타입이나 도메인이 맞지 않으면 경고 없이 조용히 끊어지므로(실습 21-4), 로그에 아무것도 없다는 사실이 "문제없음"을 뜻하지 않습니다. 개수, 타입, QoS를 숫자와 글자로 확인한 다음에 코드를 의심합니다.
+- **CLI가 출력 없이 멈추면 daemon부터 확인합니다.** 이 가이드의 WSL 환경에서는 daemon이 없을 때 `ros2` 명령이 2분 넘게 멈춥니다. Ctrl+C로 끊고 `ros2 daemon start`를 실행한 뒤 다시 시도합니다(README의 daemon 절, 실습 21-8). `ros2 daemon stop`을 했다면 바로 이어서 `ros2 daemon start`를 입력합니다.
+- **이상한 동작은 bag으로 남겨 재현합니다.** 로봇에서 문제가 생긴 순간의 토픽을 기록해 두면, 로봇 없이도 같은 입력으로 노드를 몇 번이고 다시 시험할 수 있습니다. 모든 토픽(`-a`)을 기록하면 디스크와 성능 부담이 크므로 필요한 토픽만 고릅니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -636,3 +748,4 @@ ROS 배포판(Jazzy), OS(Ubuntu 24.04 on WSL2), WSL 네트워크 모드(`network
   - 실습 21-8의 `DaemonNode.connected` 소스(`except ConnectionRefusedError: return False`)와 `base_port = 11511`.
 - 확인 못 함(GUI): rqt_console, rqt_graph, rqt_plot, rqt_bag, rviz2, PlotJuggler 화면과 조작 방법, Gazebo 실행과 실습 21-6 전체. 창을 띄우는 프로그램은 검증 환경에서 실행하지 않았습니다. rqt_graph 체크박스 이름, PlotJuggler 메뉴 이름, rviz2 표시 항목 이름은 일반적인 화면 구성을 바탕으로 적었으므로 화면과 다를 수 있습니다.
 - 확인 못 함: `enable_logger_service=True` 를 뺐을 때의 서비스 목록, `print()` 출력 위치(Q1), 노드를 죽인 뒤의 발행자 수 변화, 시각이 다른 노드 사이의 TF 오류 문구, PlotJuggler의 `plotjuggler` 패키지 실행 파일 이름(설치하지 않음), 실습 21-8의 포트 실험(조정자가 확인한 결과를 옮겼습니다).
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
