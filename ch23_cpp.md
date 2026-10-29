@@ -10,6 +10,22 @@
 C++ 패키지는 `CMakeLists.txt` 에서 "무엇을 컴파일하고, 무엇과 링크하고, 어디에 설치할지"를 직접 적어야 합니다.
 그래서 소스를 고칠 때마다 다시 빌드해야 하고, `--symlink-install` 도 C++ 소스 수정을 바로 반영해 주지는 않습니다.
 
+```mermaid
+flowchart LR
+  std[("std_msgs<br/>Int32.msg")]
+  iface[("basics_interfaces<br/>WordCount.srv")]
+  cpp_pub("C++ topic_publisher<br/>basics_cpp") -->|"std_msgs/msg/Int32"| counter["/counter"]
+  counter --> py_sub("Python topic_subscriber<br/>basics")
+  call[("ros2 service call<br/>Python으로 된 도구")] -->|"요청"| wc{{"/word_count 서비스"}}
+  wc --> srv("C++ service_server<br/>basics_cpp")
+  std -.->|"생성된 코드"| cpp_pub
+  std -.->|"생성된 코드"| py_sub
+  iface -.->|"생성된 코드"| call
+  iface -.->|"생성된 코드"| srv
+```
+
+그림에서 볼 것: 실선의 양 끝은 언어가 서로 다릅니다. 그래도 연결되는 것은 양쪽이 같은 정의 파일에서 생성된 코드를 쓰기 때문입니다(점선). 실습 23-5에서는 화살표 양 끝의 언어를 바꿔서도 확인합니다.
+
 ## 1. 목표와 개념
 
 3장의 카운터 발행자와 구독자, 4장의 단어 세기 서비스를 C++로 옮기고, Python 노드와 섞어 통신시켜 봅니다 (원서 PDF p.428~434).
@@ -19,9 +35,120 @@ C++ 패키지는 `CMakeLists.txt` 에서 "무엇을 컴파일하고, 무엇과 �
 - **CMakeLists.txt**: CMake라는 빌드 도구에게 주는 설명서입니다. 실행 파일 이름, 소스 파일, 의존 라이브러리, 설치 위치를 적습니다.
 - **package.xml**: 패키지의 이름과 의존성을 선언하는 파일입니다. colcon은 이 파일을 보고 빌드 순서를 정하고, rosdep은 설치할 시스템 패키지를 정합니다.
 
+```mermaid
+flowchart TB
+  py("rclpy 노드<br/>basics topic_publisher")
+  cpp("rclcpp 노드<br/>basics_cpp topic_publisher")
+  rclpy[("rclpy")]
+  rclcpp[("rclcpp")]
+  rcl[("rcl<br/>공통 C 라이브러리")]
+  rmw[("rmw 인터페이스")]
+  dds[("Cyclone DDS<br/>rmw_cyclonedds_cpp")]
+  py -.-> rclpy
+  cpp -.-> rclcpp
+  rclpy -.-> rcl
+  rclcpp -.-> rcl
+  rcl -.-> rmw
+  rmw -.-> dds
+```
+
+그림에서 볼 것: 두 언어가 갈라지는 곳은 맨 위의 클라이언트 라이브러리 한 층뿐입니다. 점선은 아래 층을 부르는 관계입니다. rcl부터 아래는 같은 코드라서, 같은 도메인에 있으면 언어와 상관없이 같은 방식으로 서로를 발견하고 통신합니다.
+
+예:
+
+```cpp
+pub_ = create_publisher<std_msgs::msg::Int32>("counter", 10);
+```
+
+```python
+self.pub = self.create_publisher(Int32, 'counter', 10)
+```
+
+위는 실습 23-2의 C++ 줄이고, 아래는 3장 실습 3-1의 Python 줄입니다. 함수 이름, 토픽 이름, QoS 값이 같고, 메시지 타입을 넘기는 방식(C++은 꺾쇠 `< >` 안의 템플릿 인자)만 다릅니다.
+
+**빌드 흐름.** Python 패키지는 `.py` 파일을 설치 폴더에 놓기만 하면 실행할 수 있지만, C++ 패키지는 소스를 컴파일하고 라이브러리와 링크해서 실행 파일을 만든 뒤 설치해야 합니다. 이 세 단계를 무엇으로 어떻게 할지 `CMakeLists.txt`가 정합니다.
+
+```mermaid
+flowchart LR
+  cml[("CMakeLists.txt")]
+  src[("src/topic_publisher.cpp")] --> build[("colcon build<br/>컴파일과 링크")]
+  cml -.->|"add_executable, target_link_libraries"| build
+  build --> bin[("build/basics_cpp/topic_publisher")]
+  bin --> inst[("install/basics_cpp/lib/basics_cpp/topic_publisher")]
+  cml -.->|"install(TARGETS ...)"| inst
+  run[("ros2 run basics_cpp topic_publisher")] -.->|"여기서 찾음"| inst
+```
+
+그림에서 볼 것: 실행 파일은 먼저 `build/` 안에 만들어지고, `install(TARGETS ...)` 줄이 있어야 `install/` 아래로 옮겨집니다. `--symlink-install`이면 `install/` 쪽은 `build/` 쪽 실행 파일을 가리키는 링크가 됩니다(실습 23-3). 그래서 `.cpp`를 고친 뒤에는 `build/` 쪽을 다시 만들어야, 즉 다시 빌드해야 바뀐 동작이 나옵니다.
+
+예:
+
+```cmake
+add_executable(topic_publisher src/topic_publisher.cpp)
+target_link_libraries(topic_publisher rclcpp::rclcpp ${std_msgs_TARGETS})
+```
+
+실습 23-3의 `CMakeLists.txt`에서 실행 파일 하나를 만드는 두 줄입니다. 첫 줄의 이름 `topic_publisher`가 그대로 `ros2 run basics_cpp topic_publisher`의 실행 파일 이름이 됩니다.
+
 원서가 말하듯 언제 C++를 쓸지는 "그 편이 일이 쉬워질 때"입니다 (원서 PDF p.426). 하드웨어 SDK가 C/C++로만 제공될 때, 이미 C++로 된 패키지를 고칠 때, 계산이 정말 무거울 때가 대표적입니다. 로보틱스 현장에서는 드라이버와 제어 루프에 C++가, 실험과 상위 로직에 Python이 많이 쓰이므로 두 언어 노드를 섞는 일이 흔합니다.
 
 비유: 메시지 정의는 공용어 사전이고, rclpy와 rclcpp는 같은 사전을 쓰는 두 통역사입니다. 누가 통역했든 받는 쪽은 같은 문장을 받습니다.
+
+### 코드와 폴더 구조
+
+23장을 마치면 워크스페이스에 `basics_cpp` 패키지(ament_cmake)가 더해집니다.
+
+```text
+~/rosbook_ws/src/basics_cpp/
+├── CMakeLists.txt          찾을 의존성, 실행 파일 3개, 링크 대상, 설치 위치 (23-1에서 생성, 23-3에서 수정)
+├── package.xml             rclcpp, std_msgs, basics_interfaces 의존성 (23-1에서 생성)
+├── include/basics_cpp/     헤더 파일 자리. 이 장에서는 비어 있습니다
+├── src/
+│   ├── topic_publisher.cpp     /counter 발행 (23-2)
+│   ├── topic_subscriber.cpp    /counter 구독 (23-2)
+│   └── service_server.cpp      /word_count 서비스 서버 (23-4)
+└── LICENSE
+```
+
+`include/basics_cpp/`는 여러 소스 파일이 함께 쓰는 클래스 선언을 헤더로 나눌 때 씁니다. 이 장의 노드는 파일 하나에 클래스와 `main`을 모두 두었으므로 쓰지 않습니다.
+
+3장의 `basics`(ament_python)와 나란히 놓으면 다음과 같습니다.
+
+| 할 일 | `basics` (ament_python) | `basics_cpp` (ament_cmake) |
+|---|---|---|
+| 빌드 방법을 적는 파일 | `setup.py`, `setup.cfg` | `CMakeLists.txt` |
+| 노드 소스 위치 | `basics/*.py` | `src/*.cpp` |
+| 실행 파일 등록 | `entry_points`의 `console_scripts` | `add_executable`과 `install(TARGETS ...)` |
+| 의존성 선언 | `package.xml`만 | `package.xml`과 `CMakeLists.txt`의 `find_package`, `target_link_libraries` |
+| 소스를 고친 뒤 (`--symlink-install`) | 다시 빌드하지 않아도 됨 | 반드시 다시 빌드 |
+| 실행 파일이 설치되는 곳 | `install/basics/lib/basics/` | `install/basics_cpp/lib/basics_cpp/` |
+
+실행 파일이 놓이는 자리가 같은 모양(`lib/<패키지>/`)이므로 `ros2 run`은 두 패키지를 구분하지 않습니다. 빌드 뒤의 설치 폴더는 다음과 같습니다.
+
+```text
+~/rosbook_ws/install/basics_cpp/lib/basics_cpp/
+├── topic_publisher     -> build/basics_cpp/topic_publisher 를 가리키는 링크
+├── topic_subscriber
+└── service_server
+```
+
+노드 코드의 뼈대는 CONVENTIONS.md 6절의 Python 뼈대와 같은 순서입니다. `rclcpp::Node`를 상속한 클래스의 생성자에서 publisher, subscription, timer, service를 만들고, `main`은 `init`, `spin`, `shutdown` 세 줄입니다.
+
+```cpp
+rclcpp::init(argc, argv);
+rclcpp::spin(std::make_shared<TopicPublisher>());
+rclcpp::shutdown();
+```
+
+Python과 달리 `try`로 감싸지 않습니다. 또 C++은 publisher와 timer를 담을 멤버 변수(`pub_`, `timer_`)를 클래스 안에 타입과 함께 선언해야 합니다.
+
+### 실무 메모
+
+- 새 노드는 Python으로 먼저 만들어 구조와 토픽 이름을 확정하고, `ros2 topic hz`나 콜백 시간 로그로 느린 곳을 확인한 뒤 그 노드만 C++로 옮기는 흐름이 흔합니다. 노드 이름, 토픽 이름, 메시지 타입을 그대로 두면 나머지 노드는 아무것도 바꾸지 않아도 됩니다.
+- 그렇게 옮겼다면 launch 파일에서는 `Node(package='basics', ...)`의 `package`만 `basics_cpp`로 바꾸면 됩니다. 실행 파일 이름도 같게 지어 두는 이유입니다.
+- 메시지와 서비스 정의는 `basics_interfaces`처럼 한 패키지에 두고 두 언어가 함께 씁니다. C++ 쪽은 `package.xml`의 `<depend>`, `find_package`, `${<패키지>_TARGETS}` 링크 세 곳에 모두 적어야 합니다.
+- C++ 빌드 오류는 길게 이어지므로 `colcon build` 출력에서 첫 `error:` 줄부터 읽습니다(4절).
+- 센서 토픽을 C++에서 받을 때는 3장의 `qos_profile_sensor_data`에 해당하는 `rclcpp::SensorDataQoS()`를 QoS 자리에 넘깁니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -504,3 +631,4 @@ CMake 설정 단계는 통과할 가능성이 큽니다. 대신 `${basics_interf
   - 4절의 `timer_` 를 지역 변수로 만든 경우와 `package.xml` 의존성을 지운 경우(예상만 적었습니다).
   - Q1의 `find_package` 누락 시 정확한 오류 위치, Q4의 연속 공백 입력에 대한 실제 응답(원서 방식은 컴파일되지 않아 실행 불가, 이 장 방식은 `std::istringstream` 의 동작에 근거).
   - 원서의 C++ 코드 자체는 ROS 1 환경이 없어 컴파일해 보지 않았습니다. 6절의 오류는 코드를 읽어 판단했습니다.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
