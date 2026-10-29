@@ -22,6 +22,10 @@ Quigley, Gerkey, Smart의 *Programming Robots with ROS* (O'Reilly, 2015)는 ROS 
 4. "일부러 망가뜨려 보기"는 건너뛰지 않습니다. 정상으로 동작할 때보다 망가졌을 때 ROS 2의 구조가 더 잘 드러납니다.
 5. 막히면 장 번호와 실습 번호, 실행한 명령, 출력 전체를 Claude에게 보여 주고 질문합니다.
 
+각 장의 "이 장에서 체감할 구조"와 "목표와 개념"에는 그림, 한두 줄짜리 코드 예시, 패키지 폴더 구조, 실무 메모가 들어 있습니다. 실습에 들어가기 전에 이 부분을 읽고, 무엇이 어떻게 연결되는지 그림으로 먼저 잡아 두면 실습이 훨씬 잘 들어옵니다. 1절의 코드 예시는 읽기만 하고, 직접 입력은 3절 실습에서 합니다.
+
+그림은 mermaid 형식으로 그렸습니다. GitHub에서 문서를 열면 그림으로 보입니다. VS Code의 Markdown 미리 보기에서 보려면 "Markdown Preview Mermaid Support" 확장을 설치합니다. 확장이 없으면 그림 대신 그림을 그리는 글자가 그대로 보입니다.
+
 1~5장은 개념을 이미 읽었더라도 ROS 2 코드를 처음 직접 작성하는 단계이므로 순서대로 실습하기를 권합니다.
 
 ## 실습 환경
@@ -103,6 +107,7 @@ ros2 daemon start > /dev/null 2>&1
 
 - daemon을 다시 띄워야 할 때(RMW를 바꾼 뒤, CLI 결과가 실제 상태와 다르게 보일 때)는 `ros2 daemon stop` 직후에 `ros2 daemon start`를 실행합니다. `stop`은 daemon이 떠 있을 때만 바로 끝납니다.
 - `ros2 daemon status`는 쓰지 않습니다. daemon이 없을 때 "없다"고 알려 주는 대신 2분 넘게 멈춥니다.
+- daemon은 CLI의 질문을 2시간 동안 한 번도 받지 않으면 스스로 꺼집니다(`ros2cli/daemon/__init__.py`의 `serve()` 기본값). `.bashrc`의 줄은 터미널을 열 때만 실행되므로, 오래 쉬었다가 같은 터미널에서 명령이 멈추면 Ctrl+C 뒤 `ros2 daemon start`를 입력합니다.
 - 이미 멈춘 명령은 Ctrl+C로 끊고 `ros2 daemon start`를 실행한 뒤 다시 입력합니다.
 - `ros2 topic list --no-daemon`처럼 `--no-daemon`을 붙이면 daemon을 거치지 않고 그 명령이 직접 탐색합니다. 조금 느리지만 daemon 상태와 상관없이 동작합니다.
 
