@@ -6,10 +6,19 @@
 
 ## 이 장에서 체감할 구조
 
+```mermaid
+flowchart LR
+  patrol("patrol 또는 patrol_fsm 노드") -->|"goal"| ntp[/"/navigate_to_pose 액션<br/>nav2_msgs/action/NavigateToPose"/]
+  ntp -->|"feedback, result"| patrol
+  fake("fake_nav 노드") -.->|"13-3, 13-4, 13-7에서 대신 받음"| ntp
+  ntp --> bt("bt_navigator")
+  bt -.-> pc("planner_server, controller_server")
+  pc --> cmd["/cmd_vel"]
+  cmd --> robot[("로봇 (Gazebo)")]
 ```
-patrol (ActionClient) ──goal──> /navigate_to_pose (nav2_msgs/action/NavigateToPose) ──> bt_navigator ──> planner, controller ──/cmd_vel──> 로봇
-           <──feedback, result──
-```
+
+그림에서 볼 것: 순찰 노드는 액션 이름과 타입만 알고, 그 뒤가 진짜 Nav2인지 가짜 서버인지 모릅니다.
+
 순찰은 "목표 하나 보내기, 결과 기다리기, 다음 목표로"의 반복이고, 상태 기계(state machine)는 이 반복을 상태와 전이로 정리하는 틀입니다. Nav2 내부도 같은 문제를 행동 트리(behavior tree)로 풉니다.
 
 ## 1. 목표와 개념
@@ -17,11 +26,128 @@ patrol (ActionClient) ──goal──> /navigate_to_pose (nav2_msgs/action/Navi
 이 장의 목표는 지도 위의 여러 지점을 차례로 돌며 끝없이 순찰하는 로봇을 만들고, 같은 동작을 상태 기계로 다시 짜 보는 것입니다.
 
 - **NavigateToPose 액션**: Nav2의 `bt_navigator` 노드가 제공하는 액션 서버입니다. 목표 자세(`PoseStamped`)를 받아 경로를 만들고 따라가며, 남은 거리 같은 피드백을 보냅니다. 액션은 오래 걸리는 요청을 보내고, 중간 경과(피드백)와 최종 결과를 받는 통신 방식입니다.
+
+  예:
+
+  ```python
+  send_future = self.client.send_goal_async(goal)
+  rclpy.spin_until_future_complete(self, send_future)
+  ```
+
+  실습 13-4의 `patrol.py`에서 가져온 줄입니다. 10장의 `patrol.py`는 콜백으로 다음 목표를 보냈지만, 이 장은 future가 끝날 때까지 그 자리에서 노드를 돌리고 다음 줄로 넘어가는 순차 방식을 씁니다.
 - **웨이포인트**: 순찰할 지점 목록입니다. 각 지점은 지도 좌표계(`map`)의 x, y와 도착했을 때 바라볼 방향(yaw)입니다.
+
+  예:
+
+  ```python
+  WAYPOINTS = [(0.5, 0.5, 0.0), (1.5, -0.5, math.pi / 2), (0.0, 0.0, math.pi)]
+  ```
+
+  실습 13-4의 목록을 한 줄로 줄여 쓴 것입니다. 값은 특정 지도의 `map` 프레임 좌표라서, 13-2에서 자기 지도로 고른 값으로 바꿉니다.
 - **상태 기계**: 로봇이 지금 하는 일(상태)과, 그 일이 끝났을 때 결과(outcome)에 따라 다음 상태로 넘어가는 규칙(전이)을 표로 적은 것입니다. 상태가 늘어나도 흐름이 한눈에 보이고, 실패했을 때 어디로 갈지 명시할 수 있습니다.
+
+  예:
+
+  ```python
+  StateMachine.add('ONE', Say('one'),
+                   transitions={'next': 'TWO', 'finished': 'finished'})
+  ```
+
+  실습 13-5의 `simple_fsm.py`에서 가져온 줄입니다. 상태 이름(`ONE`), 상태 객체(`Say`), 그리고 "결과 이름 → 다음 상태 이름" 표가 한 번에 등록됩니다.
 - **행동 트리**: Nav2가 내부에서 쓰는 방식입니다. 상태 기계가 "다음에 어디로 갈지"를 적는다면, 행동 트리는 "어떤 순서와 조건으로 하위 행동을 시도할지"를 나무 모양으로 적습니다.
 
+  예:
+
+  ```xml
+  <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+    <PipelineSequence name="NavigateWithReplanning">
+  ```
+
+  실습 13-8에서 읽는 `navigate_to_pose_w_replanning_and_recovery.xml`의 바깥 두 줄입니다. 전이를 적는 대신 "실패하면 6번까지 복구 후 재시도"라는 규칙을 노드 하나(`RecoveryNode`)로 감쌉니다.
+
 비유: 경비원이 순찰표의 지점을 하나씩 확인하고 서명하는 것이 웨이포인트 순찰이고, "문이 잠겨 있으면 관리실에 연락, 아니면 다음 지점"처럼 상황별 행동을 적은 근무 지침서가 상태 기계입니다.
+
+실습 13-7의 `patrol_fsm`은 웨이포인트 세 개를 상태 세 개로 만듭니다.
+
+```mermaid
+stateDiagram-v2
+  [*] --> WAYPOINT_0
+  WAYPOINT_0 --> WAYPOINT_1 : succeeded
+  WAYPOINT_1 --> WAYPOINT_2 : succeeded
+  WAYPOINT_2 --> WAYPOINT_0 : succeeded
+  WAYPOINT_0 --> [*] : aborted, preempted
+  WAYPOINT_1 --> [*] : aborted, preempted
+  WAYPOINT_2 --> [*] : aborted, preempted
+```
+
+그림에서 볼 것: `succeeded`만 다음 상태로 이어지고, `aborted`와 `preempted`는 전이가 적혀 있지 않아 상태 기계 전체가 같은 이름의 결과로 끝납니다. 13-7의 관찰과 Q7이 이 끝나는 화살표를 다음 상태로 바꾸는 이야기입니다.
+
+상태 기계 노드와 Nav2는 다음처럼 주고받습니다.
+
+```mermaid
+sequenceDiagram
+  participant sm as 상태 기계 (메인 스레드)
+  participant ex as executor (spin 스레드)
+  participant bt as bt_navigator
+  sm->>bt: WAYPOINT_0의 SimpleActionState가 navigate_to_pose 목표 전송
+  bt-->>ex: 수락, 피드백
+  bt-->>ex: 결과 (SUCCEEDED)
+  ex-->>sm: 결과 전달
+  sm->>sm: succeeded를 내고 WAYPOINT_1로 전이
+  sm->>bt: WAYPOINT_1의 목표 전송
+```
+
+그림에서 볼 것: `sm.execute()`는 메인 스레드를 붙잡고 있으므로, 액션 응답은 다른 스레드에서 도는 executor가 받습니다. 13-7의 코드가 `threading.Thread(target=executor.spin)`을 따로 띄우는 이유입니다.
+
+### 코드와 폴더 구조
+
+이 장은 `patrol` 패키지를 새로 만듭니다. ament_python 패키지의 기본 구성은 7장의 `wander_bot`과 같습니다.
+
+```text
+~/rosbook_ws/src/patrol/
+├── package.xml       rclpy, nav2_msgs 등 depend와 smach, smach_ros exec_depend (13-3)
+├── setup.py          실행 파일 다섯 개를 한꺼번에 등록 (13-3)
+├── setup.cfg         ros2 pkg create가 작성, 고치지 않음
+├── resource/patrol   패키지 표시 파일, 고치지 않음
+├── patrol/
+│   ├── __init__.py
+│   ├── fake_nav.py     navigate_to_pose를 흉내 내는 액션 서버 (13-3)
+│   ├── patrol.py       WAYPOINTS, make_pose, 순차 방식 순찰 노드 (13-4)
+│   ├── simple_fsm.py   상태 두 개짜리 첫 상태 기계, 노드 없음 (13-5)
+│   ├── shapes.py       상태 기계 안에 상태 기계 넣기, 노드 없음 (13-6)
+│   └── patrol_fsm.py   SimpleActionState로 짠 순찰 (13-7)
+└── test/             flake8, pep257, copyright 검사 (ros2 pkg create가 작성)
+```
+
+- 패키지 이름과 모듈 이름이 둘 다 `patrol`이라서, `patrol_fsm.py`는 `from patrol.patrol import make_pose, WAYPOINTS`로 같은 패키지의 다른 파일을 가져다 씁니다. 공통 함수와 데이터는 한 파일에 두고 나머지가 import하는 구조입니다.
+- 앞 장과 달라지는 뼈대는 세 가지입니다. `patrol.py`는 콜백 대신 `spin_until_future_complete`로 기다립니다. `simple_fsm.py`와 `shapes.py`는 통신을 하지 않으므로 `rclpy.init`도 Node도 없습니다. `patrol_fsm.py`는 Node를 상속하지 않고 `Node('patrol_fsm')`을 바로 만들며, spin을 별도 스레드에 맡깁니다.
+
+smach 상태 클래스와 상태 기계를 조립하는 코드의 뼈대는 다음과 같습니다. 13-5의 코드에서 이름만 일반화했습니다.
+
+```python
+class MyState(State):
+    def __init__(self):
+        super().__init__(outcomes=['succeeded', 'aborted'])
+
+    def execute(self, userdata):
+        return 'succeeded'
+
+
+sm = StateMachine(outcomes=['done', 'failed'])
+with sm:
+    StateMachine.add('A', MyState(), transitions={'succeeded': 'B', 'aborted': 'failed'})
+    StateMachine.add('B', MyState(), transitions={'succeeded': 'done', 'aborted': 'failed'})
+outcome = sm.execute()
+```
+
+상태는 낼 수 있는 결과 이름을 `outcomes`로 미리 선언하고, `execute()`는 그중 하나를 문자열로 돌려줍니다. 상태 기계는 `with` 블록 안에서 상태를 추가하고, 처음 추가한 상태(`A`)에서 시작합니다.
+
+### 실무 메모
+
+- 상태 기계는 "지금 어느 상태이고 결과에 따라 어디로 가는가"를 모두 적으므로 흐름을 따라 읽기 쉽지만, 상태가 늘수록 전이 수가 빠르게 늘어납니다. 행동 트리는 재시도나 대체 같은 패턴을 `RecoveryNode` 같은 노드로 재사용하고, Nav2는 그 트리를 XML 파일로 바꿔 끼웁니다 (`waffle_pi.yaml`의 `default_nav_to_pose_bt_xml`). 작업 순서가 짧고 분명하면 상태 기계, 실패 처리와 재시도가 많으면 행동 트리가 다루기 쉽습니다.
+- 상태마다 실패 결과(`aborted` 같은 것)를 반드시 선언하고, 그 결과가 어디로 가는지 전이에 적어 둡니다. 13-7처럼 적지 않은 결과는 상태 기계 전체를 끝내므로, "의도한 종료"인지 "빠뜨린 전이"인지 코드만 보고 구별할 수 있게 합니다.
+- 실제 로봇을 움직이기 전에 같은 이름과 타입의 가짜 액션 서버(13-3의 `fake_nav`)로 클라이언트 흐름과 실패 처리를 먼저 시험합니다. `succeed` 파라미터처럼 실패를 일부러 만들 수 있는 스위치를 넣어 두면 실패 경로까지 확인할 수 있습니다.
+- 웨이포인트는 지도에 묶인 데이터입니다. 13-4처럼 코드 상수로 두면 지도를 바꿀 때마다 코드를 고쳐야 하므로, 실제 프로젝트에서는 10장의 `patrol.py`처럼 파라미터로 받거나 설정 파일로 빼 둡니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -705,3 +831,4 @@ smach는 상태의 결과가 전이 표에 없으면 상태 기계 결과 목록
   - smach를 쓰는 `simple_fsm`, `shapes`, `patrol_fsm` 실행: 패키지를 설치할 수 없는 검증 조건이었습니다. 코드는 flake8을 통과했고, smach 소스의 API(`SimpleActionState(node, ...)`, 처음 추가한 상태가 시작 상태, `InvalidUserCodeError`)를 읽어서 맞췄지만 실행 결과(13-5~13-7의 관찰)는 예상입니다.
   - Gazebo, Nav2, rviz2를 띄운 모든 관찰(확인 못 함(GUI)): 13-1의 send_goal과 피드백, 13-2의 Publish Point, 실제 로봇 순찰.
   - 4절의 액션 이름 오타, 타입 불일치, 노드 종료, `/map` QoS, `use_sim_time` 누락 증상은 실행하지 않은 예상입니다. `TURTLEBOT3_MODEL` 누락의 `KeyError`는 launch 파일 코드를 읽어 판단했습니다.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
