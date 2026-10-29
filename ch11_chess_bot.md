@@ -19,13 +19,27 @@ sudo apt install ros-jazzy-moveit ros-jazzy-moveit-resources-panda-moveit-config
 내 노드는 팔의 관절을 직접 움직이지 않습니다. `/move_action` 액션으로 move_group에게 "손을 여기로"라고 요청하고, move_group이 경로를 계획해 컨트롤러의 액션으로 넘깁니다.
 관절 값은 `/joint_states`로 나오고, robot_state_publisher가 URDF와 합쳐 `/tf`로 바꿉니다.
 
+```mermaid
+flowchart LR
+  playback("chess_playback 노드") --> move_action[/"/move_action 액션<br/>MoveGroup"/]
+  playback --> scene{{"/apply_planning_scene 서비스"}}
+  move_action --> move_group("move_group 노드")
+  scene --> move_group
+  move_group --> fjt[/"/panda_arm_controller/follow_joint_trajectory 액션<br/>FollowJointTrajectory"/]
+  subgraph cm["ros2_control: controller_manager"]
+    arm_ctrl("panda_arm_controller")
+    jsb("joint_state_broadcaster")
+  end
+  fjt --> arm_ctrl
+  arm_ctrl --> mock[("mock 하드웨어")]
+  mock --> jsb
+  jsb --> joint_states["/joint_states"]
+  joint_states --> move_group
+  joint_states --> rsp("robot_state_publisher 노드")
+  rsp -->|"URDF + 관절 값"| tf["/tf"]
 ```
-chess_playback ──/move_action──▶ move_group ──FollowJointTrajectory──▶ panda_arm_controller
-      │                              ▲                                       │ (ros2_control,
-      └──/apply_planning_scene───────┘                                       ▼  mock 하드웨어)
-                                     ◀── /joint_states ── joint_state_broadcaster
-                 robot_state_publisher ◀── /joint_states        (URDF + 관절 값) ──▶ /tf
-```
+
+그림에서 볼 것: 내 노드에서 하드웨어까지 가는 길에 액션이 두 번 있습니다. 앞의 것(`/move_action`)은 "어디로 가라"이고, 뒤의 것(`follow_joint_trajectory`)은 "이 궤적을 따라가라"입니다. 관절 값은 반대 방향으로 `/joint_states`를 타고 move_group과 robot_state_publisher에게 돌아옵니다.
 
 ## 1. 목표와 개념
 
@@ -34,12 +48,101 @@ chess_playback ──/move_action──▶ move_group ──FollowJointTrajector
 - **링크(link)와 조인트(joint)**: 링크는 단단한 몸체 하나이고, 조인트는 두 링크를 잇는 연결입니다. 회전 조인트(revolute)는 각도 하나, 직선 조인트(prismatic)는 길이 하나를 바꿉니다.
 - **기구학 사슬(kinematic chain)**: 바닥에서 손끝까지 링크와 조인트가 번갈아 이어진 줄입니다. 조인트 값을 모두 알면 손끝 위치가 하나로 정해집니다. 이 계산이 순기구학(forward kinematics)입니다.
 - **관절 공간(joint space)과 작업 공간(Cartesian space)**: 관절 각도 벡터로 자세를 적는 방식과 손끝의 x, y, z와 방향으로 적는 방식입니다.
+
+예:
+
+```text
+관절 공간 목표 (실습 11-4):  {joint_name: panda_joint1, position: 0.5, ...} 를 7개 관절마다 하나씩
+작업 공간 목표 (실습 11-5):  ros2 run chess_bot arm_cli 0.4 0.0 0.5 3.1416 0 0
+```
+
+앞의 것은 관절 7개의 값을 모두 정해 주고, 뒤의 것은 손의 위치와 방향만 정하고 관절 값은 move_group이 IK로 구하게 맡깁니다.
+
 - **역기구학(inverse kinematics, IK)**: 손끝 목표에서 관절 값을 거꾸로 구하는 계산입니다. 답이 없을 수도, 여러 개일 수도 있습니다. 관절이 6개보다 많은 팔(Panda는 7개)은 같은 손끝 자세에 팔꿈치 위치가 다른 답이 무수히 많습니다 (원서 PDF p.189).
-- **URDF와 tf의 연결**: URDF(로봇 모양과 조인트를 적은 XML)는 고정된 설계도이고, `/joint_states`는 지금 관절 값입니다. robot_state_publisher가 둘을 합쳐 링크마다 좌표계를 계산해 `/tf`로 내보냅니다.
+- **URDF와 tf의 연결**: URDF(로봇 모양과 조인트를 적은 XML)는 고정된 설계도이고, `/joint_states`는 지금 관절 값입니다. robot_state_publisher가 둘을 합쳐 링크마다 좌표계를 계산해 `/tf`로 내보냅니다. tf 나무와 `tf2_echo`의 읽는 법은 2장에서 다뤘습니다.
+
+예:
+
+```bash
+ros2 topic echo --once /joint_states
+ros2 run tf2_ros tf2_echo panda_link0 panda_hand
+```
+
+첫 명령은 관절 이름과 값의 목록을, 둘째 명령은 그 값으로 계산된 바닥에서 손까지의 이동과 회전을 보여 줍니다. 같은 정보가 관절 공간과 작업 공간 두 가지로 보이는 셈입니다.
+
 - **MoveIt 2와 move_group**: MoveIt은 경로 계획(motion planning) 프레임워크입니다. move_group 노드가 로봇 모델, 충돌 검사, IK, 계획기를 모두 품고, 결과 궤적을 컨트롤러에게 실행시킵니다.
+
+목표 하나가 어떤 순서로 처리되는지 시간 순서로 그리면 다음과 같습니다. 액션의 goal, feedback, result 구조는 5장에서 다룬 것과 같습니다.
+
+```mermaid
+sequenceDiagram
+  participant cli as arm_cli 노드
+  participant mg as move_group
+  participant ctrl as panda_arm_controller
+  participant hw as mock 하드웨어
+  cli->>mg: MoveGroup goal (손 위치와 방향 제약)
+  mg-->>cli: goal 수락
+  mg->>mg: IK, 충돌 검사, 경로 계획
+  mg->>ctrl: FollowJointTrajectory goal (관절 궤적)
+  loop 궤적을 따라가는 동안
+    ctrl->>hw: 관절 위치 명령
+    hw-->>mg: /joint_states (joint_state_broadcaster 경유)
+  end
+  ctrl-->>mg: 궤적 실행 결과
+  mg-->>cli: result (error_code)
+```
+
+그림에서 볼 것: 내 노드는 관절 궤적을 만들지도, 컨트롤러와 직접 대화하지도 않습니다. 계획과 실행은 move_group 안에서 일어나고, 내 노드는 마지막에 `error_code` 하나만 받습니다.
+
+예:
+
+```python
+self.move_client = ActionClient(self, MoveGroup, 'move_action')
+goal.planning_options.plan_only = False
+```
+
+`arm.py`의 두 줄이고, `plan_only = False`이므로 계획과 실행을 한 번에 요청합니다. `True`로 두면 move_group은 계획만 돌려주고 컨트롤러를 부르지 않습니다.
+
 - **플래닝 씬(planning scene)**: move_group이 충돌 검사에 쓰는 세계 모형입니다. 체스판과 말을 여기에 상자와 원기둥으로 넣으면 팔이 그것들을 피해서 움직입니다.
 
+예:
+
+```python
+scene.is_diff = True
+request = ApplyPlanningScene.Request(scene=scene)
+```
+
+`arm.py`의 `apply_scene`에서 보듯 플래닝 씬은 서비스로 바꿉니다. `is_diff = True`는 "지금 씬에 이 차이만 더하라"는 뜻이라, 말 하나를 추가할 때 씬 전체를 다시 보낼 필요가 없습니다.
+
 비유: URDF는 관절 인형의 설계도, `/joint_states`는 지금 각 관절을 몇 도 굽혔는지 적은 쪽지, `/tf`는 그 둘로 계산한 손끝의 실제 위치입니다.
+
+### 체스 칸 이름이 로봇 좌표가 되기까지
+
+체스 칸 이름(`e2`)이 move_group의 목표가 되기까지 값은 다음 단계를 거칩니다. 왼쪽 묶음은 ROS를 전혀 쓰지 않는 순수 Python이고, 오른쪽 묶음에서 처음으로 ROS 메시지가 만들어집니다.
+
+```mermaid
+flowchart LR
+  game[("games/opera_1858.txt")] --> parse
+  subgraph pure["board.py: ROS 없음"]
+    parse["parse_moves<br/>e2e4 목록"] --> apply["apply_move<br/>말, 잡힌 말, 출발, 도착"]
+    apply --> sq["square_to_xy<br/>칸 이름을 x, y로"]
+  end
+  subgraph ros["chessboard_cli.py, arm.py: ROS"]
+    above["move_above_square<br/>z = 판 윗면 + 높이 + FINGER_LENGTH"] --> pose["move_to_pose<br/>위치 제약과 방향 제약"]
+  end
+  sq --> above
+  pose --> move_action[/"/move_action 액션"/]
+```
+
+그림에서 볼 것: 이 그림의 네모 상자는 토픽이 아니라 함수입니다. 좌표 변환 규칙(랭크는 x축, 파일은 y축, 칸 한 변 5 cm)은 `square_to_xy` 한 곳에만 있으므로, 판을 옮기거나 칸 크기를 바꿀 때 고칠 곳도 한 곳입니다.
+
+예:
+
+```bash
+python3 -c "from chess_bot.board import square_to_xy; print(square_to_xy('a1'), square_to_xy('h8'))"
+```
+
+출력 `(0.275, 0.175) (0.625, -0.175)`에서 a1은 로봇 가까운 왼쪽(x가 작고 y가 양수), h8은 먼 오른쪽입니다. 데모를 띄우지 않아도 이 계산을 확인할 수 있습니다.
 
 ### 어떤 팔을 쓸지 정한 근거
 
@@ -51,6 +154,50 @@ chess_playback ──/move_action──▶ move_group ──FollowJointTrajector
 | ROBOTIS OpenMANIPULATOR | `ros-jazzy-open-manipulator` 4.1.3 | 탈락. bringup이 gz_ros2_control, Dynamixel 드라이버 등에 의존해 WSL에서 실패할 지점이 많고, 관절 4개라 자세 자유도가 부족합니다. |
 
 대가도 있습니다. Panda 데모에는 물리 엔진이 없으므로 그리퍼가 말을 실제로 쥐지 못합니다. 이 장은 "쥐었다"를 플래닝 씬에서 말을 손에 붙이는(attach) 동작으로 표현합니다. 물리 시뮬레이션에서 팔을 다루는 것은 18장에서 합니다.
+
+### 코드와 폴더 구조
+
+이 장을 마친 뒤의 `chess_bot` 패키지는 다음과 같습니다. `ros2 pkg create`가 만든 파일(`setup.cfg`, `resource/chess_bot`, `chess_bot/__init__.py`)은 손대지 않으므로 줄였습니다.
+
+```text
+~/rosbook_ws/src/chess_bot/
+├── package.xml              rclpy, geometry_msgs, shape_msgs, moveit_msgs 실행 의존성 (11-5)
+├── setup.py                 실행 파일 5개 등록, 기보 파일 설치 (11-5, 최종본은 11-10)
+├── chess_bot.bash           셸 별명. 설치하지 않고 source만 함 (11-6)
+├── games/
+│   └── opera_1858.txt       오페라 게임 기보 (11-10)
+├── chess_bot/
+│   ├── arm.py               ArmClient: MoveGroup 액션과 플래닝 씬 서비스를 감싼 공용 클래스 (11-5)
+│   ├── arm_cli.py           실행 파일: 손을 x, y, z, roll, pitch, yaw로 보냄 (11-5)
+│   ├── hand.py              실행 파일: 그리퍼 open, pre, close (11-7)
+│   ├── board.py             순수 Python: 칸 좌표, 기보 해석, 수 적용 (11-8)
+│   ├── spawn_chessboard.py  실행 파일: 판과 말 32개를 씬에 추가 (11-8)
+│   ├── chessboard_cli.py    ChessArm: 칸 이름과 높이로 손을 보냄 (11-9)
+│   └── chess_playback.py    ChessPlayback: 기보 한 판을 재현 (11-10)
+└── test/
+    ├── test_board.py        board.py만 시험하는 pytest (11-10)
+    └── test_copyright.py, test_flake8.py, test_pep257.py   ros2 pkg create가 만든 코드 검사
+```
+
+- 빌드하면 기보 파일은 `setup.py`의 `data_files` 줄을 따라 `install/chess_bot/share/chess_bot/games/opera_1858.txt`에 놓입니다. 실습 11-10에서 `$(ros2 pkg prefix chess_bot)/share/chess_bot/games/...`로 찾는 것이 이 파일입니다.
+- 앞 장들의 노드는 `rclpy.spin(node)`으로 콜백을 기다리는 구조였습니다. 이 장의 실행 파일은 "이 동작이 끝나면 다음 동작"을 차례로 하는 순서형 프로그램이라, 동작마다 `rclpy.spin_until_future_complete(self, future)`로 그 결과만 기다립니다.
+- 노드 클래스가 상속으로 쌓입니다. 아래쪽 클래스는 위쪽이 가진 동작을 그대로 쓰고 한 단계 높은 동작을 더합니다.
+
+```text
+Node ← ArmClient (arm.py: move_to_pose, set_gripper, add_object ...)
+     ← ChessArm (chessboard_cli.py: move_above_square)
+     ← ChessPlayback (chess_playback.py: transfer, play)
+```
+
+- 테스트 구조: `test_board.py`는 `board.py`만 import합니다. `square_to_xy`의 모서리 좌표와 잘못된 칸 거절, `parse_moves`의 수 번호와 체크 기호 걸러 내기, `apply_move`의 잡기와 캐슬링, 그리고 오페라 게임 33수 전체를 시험합니다. rclpy와 moveit_msgs를 쓰지 않으므로 move_group 없이 `colcon test`만으로 돕니다.
+
+### 실무 메모
+
+- 좌표 계산, 기보 해석처럼 ROS와 무관한 로직은 노드 파일에서 떼어 순수 모듈로 둡니다. 그러면 로봇이나 시뮬 없이 pytest로 빠르게 시험할 수 있고, `colcon test`가 CI에서도 그대로 돕니다. 이 장의 `board.py`와 `test_board.py`가 그 예입니다.
+- 동작 계획은 언제든 실패할 수 있습니다(IK 해 없음, 충돌, 시간 초과). 목표가 수락되었는지와 결과의 `error_code`가 `MoveItErrorCodes.SUCCESS`인지를 매번 확인하고, 실패하면 다음 동작으로 넘어가지 않습니다. `arm.py`의 `_plan_and_execute`가 이 일을 한 곳에서 합니다.
+- 플래닝 그룹, 링크, 조인트 이름은 SRDF와 URDF에 적힌 것과 정확히 같아야 하므로 `arm.py` 맨 위처럼 상수로 한곳에 모읍니다. 로봇을 바꿀 때 고칠 곳이 그곳뿐이 됩니다.
+- 처음 시험하는 동작은 `velocity_scale`처럼 속도 비율을 낮게 두고 시작합니다. 시뮬에서는 차이가 작지만 실물 팔에서는 예상과 다른 경로를 보고 멈출 시간을 벌어 줍니다.
+- 계산한 목표 좌표를 로그로 남깁니다(`chessboard_cli.py`의 `get_logger().info`). 계획이 실패했을 때 어떤 좌표에서 실패했는지 바로 알 수 있습니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -1144,3 +1291,4 @@ robot_state_publisher는 새 관절 값을 받지 못하므로 마지막으로 �
   - 손이 아래를 향하는 방향이 roll = π인지는 실습 11-2의 `tf2_echo`로 학습자가 확인해야 합니다.
   - rviz2, rqt_graph 화면: 확인 못 함(GUI).
   - 오페라 게임 전체 재현에 걸리는 시간과 각 칸에서 IK가 모두 풀리는지: 확인 못 함.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
