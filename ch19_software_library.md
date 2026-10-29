@@ -218,6 +218,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/WordCount.srv"
   "action/Timer.action"
   "action/Talk.action"
+  DEPENDENCIES builtin_interfaces
 )
 ```
 
@@ -676,3 +677,4 @@ ros2 action send_goal /speak basics_interfaces/action/Talk "{sentence: 'a very l
   - 소리 출력. 검증 중에는 소리를 재생하지 않았습니다. `paplay`(`pulseaudio-utils`)와 WSLg 오디오는 학습자가 직접 확인해야 합니다. `PULSE_SERVER=unix:/mnt/wslg/PulseServer` 환경 변수가 설정된 것만 확인했습니다.
   - 5장의 `basics_interfaces` 실제 파일 목록과 함께 빌드한 결과.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 수정(2026-10-30): 실습 19-2의 CMake 블록에 5장에서 넣은 `DEPENDENCIES builtin_interfaces` 줄이 빠져 있어서 다시 넣었습니다. 블록을 그대로 덮어쓰면 5장에서 배운 의존 선언이 사라지기 때문입니다. `Complex.msg`, `WordCount.srv`, `Timer.action`, `Talk.action` 네 파일을 함께 빌드하는 경우를 이 줄이 있을 때와 없을 때 모두 시험했습니다. 둘 다 빌드되었고, Python에서 네 타입을 모두 import할 수 있었습니다. 위 "확인 못 함"의 마지막 항목은 이 시험으로 확인했습니다.

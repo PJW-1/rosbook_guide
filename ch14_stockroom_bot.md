@@ -959,7 +959,7 @@ ros2 topic info -v /cmd_vel
 
 **관찰**:
 - 로봇이 파란 선반 앞으로 가서 멈추고, 제자리에서 조금 돌아 패널을 가운데에 맞춘 뒤, 그리퍼 로그 두 줄이 나오고, 카운터로 갔다가 방 가운데로 돌아와야 합니다.
-- rqt_graph(Nodes/Topics (all))에서 맨 앞의 텍스트 그림과 같은 연결을 확인합니다. 액션은 `/navigate_to_pose/_action/...`처럼 숨은 토픽과 서비스로 보입니다.
+- rqt_graph(Nodes/Topics (all))에서 맨 앞의 구조 그림과 같은 연결을 확인합니다. 액션은 `/navigate_to_pose/_action/...`처럼 숨은 토픽과 서비스로 보입니다.
 - `topic info -v /cmd_vel`에는 publisher가 둘 이상(Nav2의 컨트롤러 쪽과 `fetch_item`) 나옵니다. 정렬 중에는 Nav2가 명령을 내지 않으므로 충돌하지 않지만, 둘이 동시에 내면 로봇이 떨립니다.
 
 더 해 보기: 13장의 smach로 `run()`을 상태 기계로 바꿔 봅니다. 이동과 그리퍼 단계는 `SimpleActionState`로, 정렬은 `State`를 상속한 클래스로 만들고, `align`이 실패하면 선반으로 다시 이동하도록 전이를 적습니다.
@@ -1024,8 +1024,8 @@ ros2 topic info -v /cmd_vel
 
 ## 6. 원서 대조 메모
 
-- 원서 PDF p.240 부근의 launch 예제에는 `use_sim_time`이 `use_time_time`으로 잘못 적힌 줄이 있습니다. 이대로면 시뮬 시간 설정이 적용되지 않습니다.
-- 원서 PDF p.244 부근의 roslaunch XML 예제에는 닫히지 않은 `<arg>` 태그가 있어 그대로 쓰면 파싱 오류가 납니다.
+- 원서 PDF p.260 부근의 launch 예제에는 `use_sim_time`이 `use_time_time`으로 잘못 적힌 줄이 있습니다. 이대로면 시뮬 시간 설정이 적용되지 않습니다.
+- 원서 PDF p.264 부근의 roslaunch XML 예제에는 닫히지 않은 `<arg>` 태그가 있어 그대로 쓰면 파싱 오류가 납니다.
 - 원서의 선반 칸 위치 계산 코드는 Python 2의 정수 나눗셈을 전제로 합니다. Python 3에서는 실수가 되어 인덱스로 쓸 때 오류가 납니다(`//`를 써야 합니다).
 - 원서는 ALVAR AR 태그를 쓰는데, `ar_track_alvar`는 ROS 1 전용입니다. Jazzy에서 태그 인식이 필요하면 `ros-jazzy-aruco-opencv` 또는 `ros-jazzy-apriltag-ros`를 검토합니다.
 - 원서의 Fetch 로봇과 시뮬 패키지는 Jazzy용이 없어서, 이 장은 원서의 과제를 "이동, 표시 인식, 정렬, 그리퍼 명령, 배달"의 흐름만 남기고 줄였습니다. 팔 경로 계획과 실제 집기는 다루지 않습니다.

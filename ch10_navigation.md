@@ -594,7 +594,7 @@ ros2 topic hz /cmd_vel
 
 - rviz2에 초록색 전체 경로(`/plan`)와 로봇 앞의 짧은 지역 경로(`/local_plan`)가 그려지고 로봇이 따라갑니다. 벽 주변의 색이 칠해진 영역이 costmap의 부풀린 장애물(inflation)입니다.
 - `ros2 action info /navigate_to_pose`의 Action clients에 rviz2 노드가 보입니다. rviz2의 Nav2 Goal 도구는 실습 10-1의 `patrol`과 같은 방식으로 액션 목표를 보냅니다.
-- 이동 중에는 `/cmd_vel`이 계속 나오고(controller_server 주기, 약 20 Hz), 도착하면 멈춥니다.
+- 이동 중에는 `/cmd_vel`이 계속 나오고, 도착하면 멈춥니다. `waffle_pi.yaml` 기준으로 controller_server는 10 Hz(`controller_frequency`)로 속도를 계산하고, `/cmd_vel` 앞의 velocity_smoother가 20 Hz(`smoothing_frequency`)로 다듬어 내보냅니다. 그래서 `ros2 topic hz /cmd_vel`은 20 Hz 안팎을 보일 것입니다.
 - 이동 중 다시 Nav2 Goal을 찍으면 이전 목표는 취소되고 새 목표로 바뀝니다 (Navigation 2 패널의 상태 표시로 확인).
 - Gazebo에서 로봇 앞에 상자(Insert 탭의 Box)를 놓으면 local costmap에 새 장애물이 나타나고 경로가 바뀝니다. 지도 파일에는 없는 장애물입니다.
 

@@ -16,11 +16,11 @@ flowchart LR
   iface[("basics_interfaces<br/>WordCount.srv")]
   cpp_pub("C++ topic_publisher<br/>basics_cpp") -->|"std_msgs/msg/Int32"| counter["/counter"]
   counter --> py_sub("Python topic_subscriber<br/>basics")
-  call[("ros2 service call<br/>Python으로 된 도구")] -->|"요청"| wc{{"/word_count 서비스"}}
+  cli_call[("ros2 service call<br/>Python으로 된 도구")] -->|"요청"| wc{{"/word_count 서비스"}}
   wc --> srv("C++ service_server<br/>basics_cpp")
   std -.->|"생성된 코드"| cpp_pub
   std -.->|"생성된 코드"| py_sub
-  iface -.->|"생성된 코드"| call
+  iface -.->|"생성된 코드"| cli_call
   iface -.->|"생성된 코드"| srv
 ```
 

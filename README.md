@@ -149,7 +149,7 @@ ros2 daemon start > /dev/null 2>&1
 | 20 | 도구 | [ch20_tools.md](ch20_tools.md) | 379~394 | 준비됨 |
 | 21 | 로봇 동작 디버깅 | [ch21_debugging.md](ch21_debugging.md) | 395~418 | 준비됨 |
 | 22 | ROS 커뮤니티 | [ch22_community.md](ch22_community.md) | 419~424 | 준비됨 |
-| 23 | ROS 2에서 C++ 쓰기 | [ch23_cpp.md](ch23_cpp.md) | 425~436 | 준비됨 |
+| 23 | ROS 2에서 C++ 쓰기 | [ch23_cpp.md](ch23_cpp.md) | 425~435 | 준비됨 |
 
 ## ROS 1 (원서) → ROS 2 Jazzy 공통 대응표
 

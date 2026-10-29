@@ -357,7 +357,7 @@ ros2 run basics topic_subscriber --ros-args -r counter:=my_counter
 
 **준비**: 터미널 두 개
 
-**직접 입력**: 폴더 `~/rosbook_ws/src/basics/launch/` 를 만들고 세 파일을 만듭니다. 세 파일은 같은 일을 합니다.
+**직접 입력**: 폴더 `~/rosbook_ws/src/basics/launch/` 는 2장 실습에서 이미 만들었습니다(없다면 새로 만듭니다). 그 안에 세 파일을 만듭니다. 세 파일은 같은 일을 합니다.
 
 파일 `~/rosbook_ws/src/basics/launch/counter.launch.py`:
 
