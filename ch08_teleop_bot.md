@@ -8,10 +8,26 @@
 키 입력을 읽는 노드와 키를 속도로 바꾸는 노드를 나누고, 둘을 `/keys` 토픽으로 잇습니다. 한쪽을 바꿔도 다른 쪽은 그대로 씁니다.
 속도 배율과 가속도 같은 "조정값"은 코드가 아니라 파라미터로 빼서, 실행 중에 `ros2 param`으로 보고 바꿉니다.
 
+```mermaid
+flowchart LR
+  kbd[("터미널 키보드")]
+  kd("keyboard_driver 노드")
+  keys["/keys"]
+  k2t("keys_to_twist 노드")
+  cmd["/cmd_vel"]
+  bridge("ros_gz_bridge 노드")
+  gz[("Gazebo")]
+  params[("파라미터<br/>linear_scale, angular_scale<br/>linear_accel, angular_accel")]
+  kbd --> kd
+  kd -->|"std_msgs/String"| keys
+  keys --> k2t
+  k2t -->|"TwistStamped"| cmd
+  cmd --> bridge
+  bridge --> gz
+  params -.-> k2t
 ```
- 터미널 키보드 ─▶ [keyboard_driver] ─▶ /keys (String) ─▶ [keys_to_twist] ─▶ /cmd_vel (TwistStamped) ─▶ 브리지 ─▶ Gazebo
-                                                         ▲ 파라미터: linear_scale, angular_scale, linear_accel, angular_accel
-```
+
+그림에서 볼 것: 키보드라는 특수한 자원은 `keyboard_driver` 노드 한 곳에만 닿습니다. 그 뒤로는 평범한 토픽이라, `/keys` 자리에 다른 입력을 꽂아도 `keys_to_twist`는 바뀌지 않습니다. 점선은 파라미터 설정이 노드로 들어오는 보조 관계입니다.
 
 ## 1. 목표와 개념
 원서 8장은 키보드로 로봇을 조종하는 프로그램을 작은 단계로 키워 갑니다(개발 방식 설명 PDF p.132). 키를 토픽으로 내보내는 노드(PDF p.133), 키를 속도로 바꾸는 노드(PDF p.134~137), 파라미터로 배율 조정(PDF p.139~141), 가감속 제한(ramp, PDF p.142~144), 시뮬에서 직접 몰아 보기(PDF p.145~146), rviz로 센서와 좌표계 보기(PDF p.146~154)입니다.
@@ -23,6 +39,124 @@
 - **rviz2**: 토픽의 데이터를 3D로 그려 보는 도구입니다. 무엇을 기준 좌표계(Fixed Frame)로 그릴지 정하고, 토픽마다 Display를 추가합니다.
 
 비유: 파라미터는 노드에 달린 조절 다이얼입니다. 다이얼 이름과 눈금 단위(타입)는 노드가 정하고, 바깥에서는 돌리기만 합니다.
+
+**키보드 노드는 터미널 설정을 바꾸고 되돌립니다.** 터미널은 기본적으로 Enter를 눌러야 한 줄이 들어옵니다. 한 글자씩 받으려면 모드를 바꿔야 하고, 끝날 때 반드시 되돌려야 합니다.
+
+예:
+```python
+tty.setcbreak(sys.stdin.fileno())
+```
+```python
+termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_attr)
+```
+첫 줄은 `main` 앞부분에서 cbreak 모드로 바꾸고, 둘째 줄은 `finally`에서 저장해 둔 원래 설정으로 되돌립니다. 이 노드는 터미널이 있어야 시작되므로 `ros2 launch`에는 맞지 않습니다(Q1).
+
+**이벤트 발행에서 주기 발행으로.** 같은 `keys_to_twist`가 실습 8-2에서 8-3으로 넘어가며 발행하는 시점이 바뀝니다.
+
+예:
+```python
+self.timer = self.create_timer(0.1, self.send_twist)
+```
+8-2에서는 `keys_callback` 안에서 곧바로 `publish`했고, 8-3부터는 콜백이 값을 보관만 하고 이 타이머가 0.1초마다 보관한 값을 다시 보냅니다. 7장의 "콜백은 저장, 타이머는 명령" 뼈대와 같습니다.
+
+**파라미터가 노드에 들어오는 경로.** 파라미터는 노드가 선언해야 존재하고, 값은 세 경로로 들어옵니다.
+
+```mermaid
+flowchart LR
+  cli[("명령줄<br/>-p linear_scale:=0.2")]
+  yaml[("keys_to_twist.yaml<br/>--params-file")]
+  node("keys_to_twist 노드<br/>declare_parameter로 선언한 이름만")
+  setcmd("ros2 param set")
+  dump("ros2 param dump")
+  cli -.->|"시작할 때"| node
+  yaml -.->|"시작할 때"| node
+  setcmd -.->|"실행 중"| node
+  node -.->|"현재 값 읽기"| dump
+```
+
+그림에서 볼 것: 명령줄과 yaml은 노드가 뜰 때 값을 정하고, `ros2 param set`은 실행 중에 값을 바꿉니다. 어느 경로든 노드 코드에서 선언하지 않은 이름은 들어오지 못합니다(Q3, 실습 8-4 관찰). `-p`와 `--params-file`을 함께 쓰면 둘 다 적용됩니다(실습 8-6).
+
+예:
+```python
+self.declare_parameter('linear_scale', 0.1)
+```
+```python
+linear_scale = self.get_parameter('linear_scale').value
+```
+첫 줄은 `__init__`에서 이름과 기본값을 선언하고, 둘째 줄은 키가 올 때마다 현재 값을 읽습니다. 기본값이 `0.1`(실수)이므로 `ros2 param set ... 1`처럼 정수를 넣으면 거부됩니다.
+
+yaml 파일은 노드 이름 아래 `ros__parameters`라는 고정 키를 두고 값을 적습니다.
+
+예:
+```yaml
+keys_to_twist:
+  ros__parameters:
+    linear_scale: 0.2
+```
+첫 줄이 실행 중인 노드 이름과 다르면 파일은 조용히 무시됩니다(Q4). 같은 형식을 `ros2 param dump /keys_to_twist`가 출력하므로, 손으로 쓰기 전에 덤프한 결과를 고쳐 써도 됩니다.
+
+**ramp는 "목표"와 "현재"를 나눕니다.** 키는 목표 속도만 정하고, 실제로 내보내는 속도는 주기마다 목표 쪽으로 한 걸음씩 움직입니다.
+
+```mermaid
+flowchart LR
+  keys["/keys"]
+  cb("keys_callback")
+  target["target_linear<br/>target_angular"]
+  timer("send_twist, 20 Hz")
+  ramp("ramped_vel")
+  accel[("linear_accel<br/>angular_accel")]
+  cmd["/cmd_vel"]
+  keys --> cb
+  cb -->|"키 값 x scale"| target
+  target --> timer
+  timer --> ramp
+  accel -.-> ramp
+  ramp -->|"TwistStamped"| cmd
+```
+
+그림에서 볼 것: 키가 눌려도 `/cmd_vel`의 값은 바로 뛰지 않고 `ramped_vel`을 거치며 조금씩 변합니다. 가속도 파라미터는 이 단계에만 들어갑니다. 상자 `target_linear`와 `target_angular`는 토픽이 아니라 노드 안의 변수입니다.
+
+예:
+```python
+step = accel * dt
+if abs(v_target - v_prev) <= step:
+    return v_target
+```
+한 주기에 움직일 수 있는 양 `step`보다 목표가 가까우면 목표로 바로 가고, 아니면 `step`만큼만 갑니다. 실습 8-5의 `linear_accel` 0.5, 주기 0.05초이면 한 주기에 0.025씩 오릅니다.
+
+### 코드와 폴더 구조
+`~/rosbook_ws/src/teleop_bot/` 패키지를 새로 만듭니다. ament_python 패키지의 기본 구조는 2장과 3장에서 설명했으므로, 이 장의 파일과 달라진 점만 적습니다.
+
+```text
+teleop_bot/
+├── package.xml                         8-1  의존성 rclpy, geometry_msgs, std_msgs
+├── setup.py                            8-1  생성, entry_points에 노드 4개 등록
+├── setup.cfg, resource/, test/         8-1  생성
+├── config/
+│   └── keys_to_twist.yaml              8-4  파라미터 파일
+└── teleop_bot/
+    ├── __init__.py                     8-1
+    ├── key_publisher.py                8-1  키보드를 읽어 /keys로 발행
+    ├── keys_to_twist.py                8-2  키마다 바로 /cmd_vel 발행
+    ├── keys_to_twist_parameterized.py  8-3  배율 파라미터, 0.1초 주기 발행
+    └── keys_to_twist_with_ramps.py     8-5  가속도 파라미터, 0.05초 주기, ramp
+```
+
+- 실행 파일 네 개가 `install/teleop_bot/lib/teleop_bot/` 아래에 생깁니다. 실행 파일 이름과 노드 이름은 다를 수 있고, 이 장에서는 일부러 다르게 둡니다.
+
+| 실행 파일 | 노드 이름 | 이유 |
+|---|---|---|
+| `key_publisher` | `keyboard_driver` | 원서의 노드 이름과 대응시킵니다. |
+| `keys_to_twist`, `keys_to_twist_parameterized`, `keys_to_twist_with_ramps` | 셋 모두 `keys_to_twist` | yaml 하나를 세 실행 파일에 그대로 쓰기 위해서입니다. 대신 동시에 하나만 실행합니다. |
+
+- `config/keys_to_twist.yaml`은 `setup.py`에 설치 대상으로 적지 않았으므로 `install/` 아래에 없습니다. 이 장에서는 `src` 경로를 `--params-file`로 직접 넘깁니다. `install/teleop_bot/share/teleop_bot/config/`에 놓는 방법은 launch 파일을 다루는 장에서 다룹니다.
+- 노드 코드의 뼈대는 7장 위에 세 가지가 더해집니다. 입력 전용 노드(`key_publisher`)는 `main`에서 `rclpy.init` 직후 터미널 설정을 바꾸고 `finally`에서 되돌립니다. 속도 변환 노드는 8-3부터 `declare_parameter`를 `__init__`에 두고, 8-5에서는 "목표 변수와 현재 값"을 나눠 타이머가 한 걸음씩 다가가게 합니다.
+
+### 실무 메모
+- **조정값은 코드에 박지 않고 파라미터로 뺍니다.** 배율과 가속도는 로봇마다, 장소마다 달라집니다. 기본값은 코드에 두고, 로봇별 값은 yaml로 따로 관리하면 같은 코드를 여러 로봇에 씁니다.
+- **파라미터 파일을 바꾼 뒤에는 실제 값을 확인합니다.** 노드 이름이 틀려도 오류가 나지 않으므로 `ros2 param get <노드> <이름>`으로 확인하는 습관이 필요합니다(4절).
+- **튜닝한 값은 `ros2 param dump`로 남깁니다.** 실행 중에 `ros2 param set`으로 맞춘 값은 노드를 끄면 사라지므로, 마음에 드는 값이 나오면 `ros2 param dump /keys_to_twist`의 출력을 yaml 파일로 저장해 둡니다.
+- **사람이 조종하는 입력에는 안전 정지를 둡니다.** 이 장의 `keys_to_twist_with_ramps`는 입력 노드가 멈춰도 마지막 목표를 계속 보내고, 종료할 때 정지 명령도 보내지 않습니다(Q6). 실제 로봇이라면 일정 시간 키가 없으면 0으로 돌아가게 하고, 종료 처리에서 정지 명령을 내고, 속도 상한을 낮은 값으로 시작하는 쪽이 안전합니다. 조종기와 자율 주행처럼 명령 출처가 둘 이상이면 `twist_mux` 같은 중재 노드를 씁니다(Q8).
 
 ## 2. 원서(ROS 1)와 달라지는 점
 | 원서 (ROS 1) | ROS 2 Jazzy | 이유와 주의점 |
@@ -658,3 +792,4 @@ ros2 topic hz /cmd_vel
   - 시뮬에서의 실제 운전, 노드를 끈 뒤 로봇의 움직임(DiffDrive 명령 시간 초과 여부): 확인 못 함(시뮬 필요).
   - rviz2 화면, Fixed Frame 오류 표시, RobotModel Durability 설정의 효과, rqt_plot 그래프: 확인 못 함(GUI).
   - `--qos-durability transient_local` echo와 `/keys`의 비호환 경고, yaml 노드 이름 오타, `declare_parameter` 생략 시 예외, `linear_accel` 0과 음수의 동작: 확인 못 함(규칙과 코드에서 유추).
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
