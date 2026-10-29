@@ -8,10 +8,22 @@
 
 이동 로봇의 바깥 약속은 "`/cmd_vel`을 받고 `/odom`과 `odom → base_footprint` 변환을 낸다" 하나입니다. 그 약속을 지키는 쪽이 파이썬 가짜 드라이버이든 Gazebo이든 다른 노드는 차이를 모릅니다.
 
+```mermaid
+flowchart LR
+  xacro[("tortoisebot.urdf.xacro")] -.->|"xacro 실행"| rsp("robot_state_publisher")
+  rsp --> rd["/robot_description"]
+  rsp --> tfs["/tf_static"]
+  rsp --> tf["/tf"]
+  js["/joint_states"] --> rsp
+  cmd["/cmd_vel"] --> fake("fake_base_driver")
+  cmd --> gz("ros_gz_bridge<br/>Gazebo DiffDrive")
+  fake --> odom["/odom"]
+  gz --> odom
+  fake --> tf
+  gz --> tf
+  gz --> js
 ```
-/cmd_vel (Twist) --> [fake_base_driver] 또는 [ros_gz_bridge → Gazebo DiffDrive] --> /odom, /tf(odom→base_footprint)
-robot_description (xacro→URDF) --> [robot_state_publisher] + /joint_states --> /tf, /tf_static (로봇 몸체 좌표들)
-```
+`fake_base_driver`와 `ros_gz_bridge`(Gazebo)는 둘 중 하나만 띄우는 같은 역할의 두 구현입니다. 어느 쪽이든 `/odom`과 `/tf`의 `odom → base_footprint`가 나오고, 몸체 링크의 변환은 `robot_state_publisher`가 `/tf_static`(고정 조인트)과 `/tf`(움직이는 조인트)로 냅니다.
 
 ## 1. 목표와 개념
 
@@ -24,6 +36,113 @@ robot_description (xacro→URDF) --> [robot_state_publisher] + /joint_states -->
 비유: `/cmd_vel`과 `/odom`은 자동차의 페달과 계기판입니다. 운전자(Nav2, teleop)는 엔진이 가솔린인지 전기인지(실물 드라이버인지 Gazebo인지) 몰라도 운전할 수 있습니다.
 
 이 가이드의 TortoiseBot 치수(몸체 0.30 × 0.20 × 0.10 m, 바퀴 반지름 0.04 m)는 원서와 다르게 새로 정했습니다. 17장의 Nav2 기본 설정과 TurtleBot3 연습장 지도에 맞는 크기입니다.
+
+### 로봇 모델: 링크와 조인트의 트리
+
+URDF는 링크를 노드로, 조인트를 간선으로 하는 트리입니다. `robot_state_publisher`는 이 트리의 조인트마다 부모 링크에서 자식 링크로 가는 좌표 변환을 만들어 내고, 그 이름이 곧 tf의 프레임 이름이 됩니다. 16-4의 모델은 아래 트리입니다.
+
+```mermaid
+flowchart TB
+  bf["base_footprint"] -->|"base_joint: fixed"| bl["base_link"]
+  bl -->|"left_wheel_joint: continuous"| lw["left_wheel"]
+  bl -->|"right_wheel_joint: continuous"| rw["right_wheel"]
+  bl -->|"front_caster_joint: continuous"| fc["front_caster"]
+  fc -->|"front_wheel_joint: continuous"| fw["front_wheel"]
+```
+
+그림에서 볼 것: 뿌리는 모양 없는 `base_footprint`입니다. `fixed` 조인트의 변환은 변하지 않으므로 `/tf_static`에 한 번만 나가고, `continuous` 조인트 4개는 `/joint_states`가 와야 `/tf`에 변환이 나갑니다.
+
+예: 16-4의 xacro는 치수를 변수로 두고 바퀴 매크로를 부릅니다. 같은 바퀴를 한 줄로 만들 수 있습니다.
+
+```xml
+<xacro:property name="wheel_r" value="0.04"/>
+<xacro:wheel name="left_wheel" r="${wheel_r}" w="${wheel_w}" m="0.2"/>
+```
+
+예: 조인트 하나는 부모, 자식, 회전 방식을 적습니다. 이 이름(`left_wheel_joint`)이 16-6에서 DiffDrive 설정과 같아야 합니다.
+
+```xml
+<joint name="left_wheel_joint" type="continuous">
+  <parent link="base_link"/>
+  <child link="left_wheel"/>
+```
+
+### 가짜 드라이버와 Gazebo는 같은 약속을 지킨다
+
+이 장의 두 구현이 지키는 약속은 `/cmd_vel`을 받고 `/odom`과 `odom → base_footprint` 변환을 내는 것입니다.
+
+예: 16-2의 가짜 드라이버는 그 약속을 이 두 줄로 지킵니다. 16-6의 Gazebo 쪽도 `frame_id`와 `child_frame_id`를 같은 이름으로 맞춥니다.
+
+```python
+odom.header.frame_id = 'odom'
+odom.child_frame_id = 'base_footprint'
+```
+
+Gazebo 쪽은 ROS와 Gazebo의 토픽이 따로 있어서, 브리지가 그 사이를 이어 줍니다.
+
+```mermaid
+flowchart LR
+  rcmd["/cmd_vel"] -->|"Twist"| br("parameter_bridge")
+  yaml[("tortoisebot_bridge.yaml")] -.-> br
+  br -->|"gz.msgs.Twist"| gcmd["cmd_vel: Gazebo 토픽"]
+  gcmd --> dd[("Gazebo DiffDrive")]
+  dd --> gout["odom, tf, joint_states: Gazebo 토픽"]
+  gout --> br
+  br --> rout["/odom, /tf, /joint_states"]
+```
+
+그림에서 볼 것: 브리지 yaml에 적은 항목만 ROS와 Gazebo 사이를 건너옵니다. `/cmd_vel`의 타입(`Twist`)도 이 yaml이 정합니다.
+
+예: 16-6의 yaml에서 `cmd_vel` 항목입니다.
+
+```yaml
+- ros_topic_name: "cmd_vel"
+  gz_topic_name: "cmd_vel"
+  ros_type_name: "geometry_msgs/msg/Twist"
+  gz_type_name: "gz.msgs.Twist"
+  direction: ROS_TO_GZ
+```
+
+### 코드와 폴더 구조
+
+이 장은 `tortoisebot` 패키지(ament_python)를 만듭니다. 패키지 기본 파일과 `data_files`의 원리는 2장에서, 시뮬과 브리지의 구조는 6장에서 설명했으므로 여기서는 이 패키지의 파일만 적습니다. 17장에서 파일이 더 늘어납니다.
+
+```text
+~/rosbook_ws/src/tortoisebot/
+├── package.xml                 # exec_depend: xacro, robot_state_publisher, ros_gz_sim 등 (16-2)
+├── setup.py                    # launch/, urdf/, config/, worlds/ 설치 + 실행 파일 1개 (16-2)
+├── tortoisebot/
+│   └── fake_base_driver.py     # /cmd_vel을 받아 /odom과 tf를 내는 가짜 드라이버 (16-2)
+├── urdf/
+│   ├── tortoisebot.urdf.xacro  # 몸체, 바퀴, 캐스터 모델과 xacro 매크로 (16-3, 16-4)
+│   └── tortoisebot_gazebo.xacro # DiffDrive와 JointStatePublisher 플러그인 (16-6)
+├── launch/
+│   ├── display.launch.py       # robot_state_publisher + 슬라이더 + rviz2로 모델 보기 (16-4)
+│   └── sim.launch.py           # Gazebo, robot_state_publisher, create, 브리지 (16-6)
+├── config/
+│   └── tortoisebot_bridge.yaml # ROS와 Gazebo 토픽을 잇는 브리지 설정 (16-6)
+└── worlds/                     # 16-2에서 폴더만 만들어 두고, 월드 파일은 17장에서 넣음
+```
+
+빌드하면 `urdf/`, `launch/`, `config/`의 파일이 `install/tortoisebot/share/tortoisebot/` 아래의 같은 이름 폴더로 복사되고(`--symlink-install`이면 링크), `fake_base_driver` 실행 파일은 `install/tortoisebot/lib/tortoisebot/`에 놓입니다. launch 파일의 `get_package_share_directory('tortoisebot')`가 이 위치를 돌려주므로 `urdf/tortoisebot.urdf.xacro`와 `config/tortoisebot_bridge.yaml`을 소스 폴더 경로 없이 찾습니다.
+
+```mermaid
+flowchart LR
+  x1[("tortoisebot.urdf.xacro")] -->|"xacro:include"| x2[("tortoisebot_gazebo.xacro")]
+  x1 -->|"Command: xacro"| disp("display.launch.py")
+  x1 -->|"Command: xacro"| sim("sim.launch.py")
+  yaml[("tortoisebot_bridge.yaml")] --> sim
+```
+
+그림에서 볼 것: 로봇 모델은 파일 하나에서 시작하고, Gazebo용 플러그인은 별도 파일로 떼어 `xacro:include`로 붙입니다. 모델 보기용 launch(`display`)와 시뮬용 launch(`sim`)가 같은 모델 파일을 읽습니다. 노드 코드는 `fake_base_driver.py` 하나뿐이고, 기본 형태에 `TransformBroadcaster`와 타이머 적분이 더해진 모양입니다. 이 패키지의 나머지는 노드 코드가 아니라 설정과 모델 파일입니다.
+
+### 실무 메모
+
+- 로봇 모델을 별도 `<robot>_description` 패키지로 분리하는 것이 흔한 관례입니다(예: `tortoisebot_description`). 같은 모델을 시뮬, 실물 드라이버, 내비게이션 패키지가 함께 의존하게 됩니다. 이 가이드는 학습 편의로 한 패키지에 두었습니다.
+- 치수와 질량은 xacro 변수로 두고, 반복되는 바퀴는 매크로로 만듭니다. 치수를 한 곳에서 고치면 DiffDrive 설정(`${2*wheel_y}`, `${wheel_r}`)도 따라 바뀌어 모델과 어긋나지 않습니다.
+- 모든 링크에 `collision`과 `inertial`을 넣습니다. 관성 값이 비현실적이면 시뮬이 튀거나 불안정해질 수 있어서, 이 장은 질량과 치수만 넣으면 계산되는 매크로를 씁니다.
+- 프레임 이름은 REP 105를 따릅니다(`odom`, `base_footprint`, `base_link`). 드라이버(가짜든 Gazebo든)가 내는 `frame_id`, `child_frame_id`와 모델의 링크 이름이 정확히 같아야 tf 트리가 이어집니다. 어긋나면 `view_frames`로 트리가 갈라진 곳을 찾습니다(4절 둘째 줄).
+- 시뮬에 붙은 노드는 `use_sim_time:=true`로 실행합니다. 하나만 빠뜨려도 변환 시각이 맞지 않습니다(4절 넷째 줄).
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -836,3 +955,4 @@ Gazebo 속 로봇은 그대로 움직입니다. DiffDrive는 Gazebo 토픽 `cmd_
 - 확인 못 함:
   - rviz2, `joint_state_publisher_gui`, Gazebo 창 화면(GUI). `sim.launch.py` 자체는 창이 뜨므로 실행하지 않았고, 같은 구성 요소를 따로 띄워 확인했습니다.
   - 4절의 둘째, 셋째, 넷째, 다섯째, 여섯째 줄은 예상 증상이며 재현하지 않았습니다.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
