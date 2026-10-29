@@ -8,10 +8,17 @@
 
 ROS를 모르는 라이브러리(여기서는 음성 합성 프로그램)를 노드 하나가 감싸고, 바깥에는 액션 인터페이스와 파라미터만 보여 줍니다.
 
+```mermaid
+flowchart LR
+  client("speech_client 노드") -->|"goal: sentence"| speak[/"/speak 액션<br/>basics_interfaces/action/Talk"/]
+  speak --> server("speaker 노드<br/>speech_server")
+  server -->|"result와 status"| speak
+  params[("파라미터<br/>volume, rate, voice, preempt, wav_dir")] -.-> server
+  server -.->|"subprocess.Popen"| espeak[("espeak-ng 프로그램")]
+  espeak --> out[("스피커 또는 wav 파일")]
 ```
-speech_client ──goal: Talk{sentence}──> /speak (액션) ──> speaker 노드 ──subprocess──> espeak-ng ──> 스피커 또는 wav 파일
-                <──result / status────                   └ 파라미터: volume, rate, voice, preempt, wav_dir
-```
+
+그림에서 볼 것: 클라이언트는 `/speak` 액션만 알고, espeak-ng가 있는지조차 모릅니다. ROS 쪽(왼쪽)과 라이브러리 쪽(오른쪽)이 만나는 곳은 `speaker` 노드 하나뿐입니다.
 
 ## 1. 목표와 개념
 
@@ -26,6 +33,129 @@ speech_client ──goal: Talk{sentence}──> /speak (액션) ──> speaker 
 비유: 외국어만 하는 전문가(라이브러리)에게 통역사(노드)를 붙여서, 팀원들은 팀 공용어(ROS 인터페이스)로만 일을 맡기게 하는 것입니다.
 
 이 장에서는 Ubuntu 24.04 apt로 설치할 수 있는 `espeak-ng` 를 씁니다. `espeak-ng` 는 명령줄 프로그램이므로, 노드가 Python의 `subprocess` 로 이 프로그램을 실행하고 끝날 때까지 지켜봅니다. 라이브러리가 Python 모듈이든 별도 프로그램이든, 노드가 감싸는 구조는 같습니다.
+
+**감싸는 노드는 번역기입니다.** 노드는 바깥에서 들어온 ROS 요청(goal, 파라미터)을 라이브러리가 알아듣는 형태(명령 인자)로 바꾸고, 라이브러리의 결과(프로세스 종료 코드)를 다시 ROS 형태(goal 상태)로 바꿉니다.
+
+```mermaid
+flowchart LR
+  c1("speech_client 노드")
+  c2("client2 노드")
+  cli("ros2 action send_goal")
+  speak[/"/speak 액션"/]
+  server("speaker 노드")
+  lib[("espeak-ng")]
+  c1 --> speak
+  c2 --> speak
+  cli --> speak
+  speak --> server
+  server -.->|"명령 인자 -a -s -v -w"| lib
+  lib -.->|"종료 코드"| server
+```
+
+그림에서 볼 것: 클라이언트가 몇 개든 모두 같은 `/speak` 액션을 씁니다. 라이브러리를 원서의 pyttsx에서 espeak-ng로 바꿔도 바뀌는 것은 `speaker` 노드 안쪽뿐이고, 클라이언트 코드는 그대로입니다.
+
+예:
+
+```python
+cmd = [self.engine,
+       '-a', str(int(volume * 100)),
+       '-s', str(self.get_parameter('rate').value),
+       '-v', self.get_parameter('voice').value]
+```
+
+실습 19-3의 `make_command` 일부입니다. ROS 파라미터 값이 espeak-ng의 명령 인자로 바뀌는 곳이 바로 여기입니다.
+
+**goal 하나가 거치는 콜백.** 5장의 액션 서버는 실행 콜백(`execute`)만 직접 썼습니다. 이 장의 서버는 goal을 받을지 정하는 `goal_callback`과, 수락한 뒤 불리는 `handle_accepted_callback`도 직접 씁니다. 바쁠 때 새 문장을 거절하려면 이 단계들이 필요합니다.
+
+```mermaid
+sequenceDiagram
+  participant c as speech_client 노드
+  participant a as 액션 서버 콜백
+  participant x as 실행 콜백
+  c->>a: send_goal 요청 (sentence)
+  a->>a: on_goal로 받을지 결정
+  a-->>c: send_goal 응답 (수락 또는 거절)
+  a->>a: on_accepted에서 active 증가
+  a->>x: goal_handle.execute()로 실행 예약
+  Note over x: 시작 시점은 정해져 있지 않음
+  x->>x: speak()가 espeak-ng를 지켜봄
+  x->>a: 상태 결정 (succeed, canceled, abort)
+  Note over x: finally에서 active 감소
+  a-->>c: get_result 응답 (status)
+```
+
+그림에서 볼 것: `on_goal`과 `on_accepted`는 액션 서버 쪽에서 차례로 실행되고, 실행 콜백은 그 뒤에 따로 예약됩니다. 그래서 "끝나지 않은 goal의 수"는 `on_accepted`에서 늘리고 실행 콜백의 `finally`에서 줄입니다(실습 19-3의 "목표 하나가 거치는 세 단계").
+
+예:
+
+```python
+def on_accepted(self, goal_handle):
+    with self.count_lock:
+        self.active += 1
+    goal_handle.execute()
+```
+
+실습 19-3의 `on_accepted` 전체입니다. 수를 늘리는 일은 잠금 안에서 하고, 실행은 `goal_handle.execute()`로 예약만 합니다.
+
+**여러 스레드가 있어야 끼어들 수 있습니다.** 실행 콜백 하나가 espeak-ng를 지켜보며 스레드를 붙잡고 있는 동안, 다른 스레드가 새 goal과 취소 요청을 처리해야 합니다. 아래는 `preempt`가 참일 때 두 번째 문장이 첫 번째 문장을 끊는 순서입니다.
+
+```mermaid
+sequenceDiagram
+  participant c1 as 첫 번째 클라이언트
+  participant t1 as 서버 스레드 1
+  participant t2 as 서버 스레드 2
+  participant c2 as 두 번째 클라이언트
+  c1->>t1: goal A
+  Note over t1: speak_lock을 잡고 espeak-ng 실행<br/>0.1초마다 확인
+  c2->>t2: goal B
+  Note over t2: 수락 뒤 실행 콜백 B 시작<br/>turn 증가 후 speak_lock을 기다림
+  Note over t1: my_turn과 turn이 다름을 보고<br/>espeak-ng 종료, 잠금 해제
+  t1-->>c1: ABORTED
+  Note over t2: speak_lock을 얻고 B를 말함
+  t2-->>c2: SUCCEEDED
+```
+
+그림에서 볼 것: 스레드 1이 A를 말하는 동안 스레드 2가 B를 받아들여야 `turn`이 바뀌고, 그것을 본 A가 스스로 멈춥니다. 스레드가 하나뿐이면 B는 A가 끝난 뒤에야 처리됩니다(4절의 `SingleThreadedExecutor` 실험).
+
+이 서버는 5장과 달리 콜백 그룹을 지정하지 않습니다. 액션 서버의 콜백(`on_goal`, `on_accepted`, `on_cancel`)은 노드의 기본 그룹에 들어가 한 번에 하나씩 실행됩니다. 실행 콜백은 rclpy 소스(`rclpy/action/server.py`)에서 `executor.create_task()`로 따로 예약되므로 그 그룹에 묶이지 않습니다. 그래서 `MultiThreadedExecutor`만으로 실행 콜백이 도는 동안에도 새 goal과 취소를 처리할 수 있습니다(7절에서 확인).
+
+### 코드와 폴더 구조
+
+새 패키지 `talk_bot`이 생기고, `basics_interfaces`에는 액션 정의 하나가 더해집니다.
+
+```text
+~/rosbook_ws/src/
+├── basics_interfaces/
+│   ├── CMakeLists.txt          "action/Talk.action" 한 줄 추가 (실습 19-2)
+│   └── action/
+│       ├── Timer.action        5장
+│       └── Talk.action         goal에 sentence 하나, result와 feedback은 비움 (실습 19-2)
+└── talk_bot/                   ros2 pkg create로 만듦 (실습 19-3)
+    ├── package.xml             rclpy, basics_interfaces, action_msgs 의존
+    ├── setup.py                speech_server, speech_client 등록 (실습 19-4)
+    ├── setup.cfg
+    ├── resource/talk_bot
+    ├── test/                   ros2 pkg create가 만든 검사 파일 3개
+    └── talk_bot/
+        ├── __init__.py
+        ├── speech_server.py    espeak-ng를 감싸는 액션 서버, 노드 이름 speaker (실습 19-3)
+        └── speech_client.py    문장을 goal로 보내고 상태를 출력 (실습 19-4)
+```
+
+- `talk_bot`은 2장의 `basics`와 같은 ament_python 구조입니다. 실행 파일은 `setup.py`의 `entry_points`에 등록합니다.
+- `speech_server.py`의 뼈대는 5장의 `fancy_action_server`와 다음이 다릅니다.
+  - `ActionServer`에 `goal_callback`과 `handle_accepted_callback`을 더 넘겨서, 받을지 말지와 수락 뒤 처리를 직접 정합니다.
+  - 공유 상태(`self.active`)와 말하기 순서를 지키려고 `threading.Lock` 두 개를 씁니다.
+  - 파라미터 다섯 개를 `__init__`에서 선언하고, goal이 올 때마다 다시 읽습니다.
+  - 실행 콜백은 `time.sleep()` 대신 `subprocess.Popen`으로 띄운 프로세스를 `poll()`로 지켜봅니다.
+
+### 실무 메모
+
+- 라이브러리를 부르는 코드와 ROS 코드를 나눠 둡니다. 이 장에서는 `make_command`와 `subprocess` 부분이 라이브러리 쪽입니다. 실제 프로젝트에서는 이런 부분을 `rclpy`를 import 하지 않는 별도 모듈로 빼 두면, ROS를 띄우지 않고 pytest만으로 시험할 수 있습니다. 실습 19-1처럼 라이브러리를 단독으로 먼저 확인하는 것도 같은 생각입니다.
+- 여러 콜백이 함께 고치는 값에는 잠금을 씁니다. `MultiThreadedExecutor`를 쓰면 콜백이 서로 다른 스레드에서 동시에 돌 수 있습니다. 어떤 콜백끼리 동시에 돌 수 있는지 콜백 그룹으로 의식적으로 정하고, 그래도 공유되는 값은 `threading.Lock`으로 지킵니다.
+- 외부 프로세스는 끝까지 정리합니다. 취소나 끼어들기로 멈출 때 `terminate()` 뒤에 `wait()`까지 불러서, 프로세스가 완전히 끝난 것을 확인한 뒤 goal 상태를 정합니다.
+- 동작 정책(여기서는 `preempt`)은 코드에 박지 않고 파라미터로 둡니다. 실행 중에 `ros2 param set`으로 바꿔 가며 시험할 수 있습니다.
+- 직접 감싸기 전에 기성 패키지가 있는지 찾아봅니다. 음성 출력은 원서가 언급한 `sound_play`가 Jazzy에도 있습니다(6절).
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -545,3 +675,4 @@ ros2 action send_goal /speak basics_interfaces/action/Talk "{sentence: 'a very l
   - 실제 espeak-ng 동작. 검증 환경에는 espeak-ng가 설치되어 있지 않아(설치 금지), 받은 인자를 기록하고 문장 길이에 비례해 기다린 뒤 빈 wav를 쓰는 가짜 `espeak-ng` 스크립트로 노드 구조만 시험했습니다. 실제 음성의 음량, 속도, 목소리 옵션(`-a`, `-s`, `-v`)의 효과와 기본 속도 175는 확인하지 않았습니다. 패키지 이름과 버전은 `apt-cache policy espeak-ng` 로 확인했습니다(1.51+dfsg-12build1, 미설치).
   - 소리 출력. 검증 중에는 소리를 재생하지 않았습니다. `paplay`(`pulseaudio-utils`)와 WSLg 오디오는 학습자가 직접 확인해야 합니다. `PULSE_SERVER=unix:/mnt/wslg/PulseServer` 환경 변수가 설정된 것만 확인했습니다.
   - 5장의 `basics_interfaces` 실제 파일 목록과 함께 빌드한 결과.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
