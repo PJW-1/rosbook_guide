@@ -10,6 +10,21 @@ ROS 2에는 중앙 서버(master)가 없고, 노드끼리 DDS로 서로를 찾�
 파라미터는 중앙 저장소가 아니라 각 노드가 자기 것을 들고 있고, 노드가 선언한 이름만 존재합니다.
 launch는 여러 노드와 그 설정(이름, 재매핑, 파라미터)을 파일 하나로 묶고, launch_testing은 그 묶음 위에서 테스트를 돌립니다.
 
+```mermaid
+flowchart LR
+  lf[("counter.launch.py")] -->|"Node: name talker"| talker("talker 노드")
+  lf -->|"Node: name listener"| listener("listener 노드")
+  lf -.->|"parameters"| tmp[("임시 YAML")]
+  tmp -.->|"--params-file"| talker
+  lf -.->|"topic 인자"| remap["counter to topic 재매핑"]
+  remap -.-> talker
+  remap -.-> listener
+  talker -->|"std_msgs/Int32"| t["/launch_counter"]
+  t --> listener
+```
+
+그림에서 볼 것: launch 파일 하나가 두 노드의 이름, 재매핑, 파라미터를 정하고, 노드끼리의 데이터 흐름(실선)은 launch가 아니라 토픽을 통해 이어집니다. 점선은 launch가 노드에게 넘기는 설정입니다. 파라미터는 임시 YAML 파일로 만들어져 `--params-file`로 전달되므로, 노드가 그 이름을 선언하지 않으면 무시됩니다(실습 20-5).
+
 ## 1. 목표와 개념
 
 이 장의 목표는 ROS 2 시스템을 띄우고, 설정하고, 들여다보고, 시험하는 명령줄 도구를 손에 익히는 것입니다. 원서가 다루는 도구 묶음(roscore, rosparam, roscd, rosrun, roslaunch, rostest, 그리고 rosnode/rostopic/rosmsg/rosservice/rossrv)을 ROS 2의 대응 도구로 하나씩 바꿔 가며 실습합니다. rosbag, rqt 계열 도구는 원서와 같이 21장에서 다룹니다 (원서 PDF p.379).
@@ -19,9 +34,119 @@ ROS 2에서 바뀐 핵심은 두 가지입니다.
 1. **master가 없습니다.** ROS 1에서는 모든 노드가 master에 이름과 주소를 등록하고 서로를 찾았습니다 (원서 PDF p.379~380). ROS 2에서는 DDS(Data Distribution Service: 노드들이 네트워크에 자기를 알리고 서로를 직접 찾는 통신 미들웨어)의 discovery(발견) 과정으로 노드가 서로를 찾습니다. 그래서 `roscore` 를 먼저 띄울 필요가 없습니다.
 2. **파라미터 서버가 없습니다.** 파라미터는 각 노드 안에 있고, 노드가 `declare_parameter` 로 선언한 이름만 존재합니다. 바깥에서는 그 노드가 제공하는 파라미터 서비스로 읽고 씁니다.
 
+```mermaid
+flowchart LR
+  cli("ros2 param 명령") -->|"요청"| svc{{"/parameter_blackboard/set_parameters 서비스"}}
+  svc --> node("parameter_blackboard 노드")
+  node -->|"변경 알림"| ev["/parameter_events"]
+```
+
+그림에서 볼 것: `ros2 param`은 파라미터 서버가 아니라 노드가 제공하는 서비스를 부릅니다. 서비스는 `get_parameters`, `set_parameters`, `list_parameters`, `describe_parameters` 등이 노드 이름 아래에 있습니다(실습 20-2의 질문과 5절 Q2). 그래서 명령에 노드 이름이 먼저 옵니다.
+
+예:
+
+```bash
+ros2 param set /parameter_blackboard my_param 4.2
+```
+
+`/parameter_blackboard`가 요청을 받을 노드이고, `my_param`은 그 노드 안에 만들어지는 이름입니다. 일반 노드에서는 코드에 `declare_parameter('my_param', 0.0)` 같은 선언이 있어야 이 이름이 존재합니다.
+
 master가 없는 대신 `ros2` 명령은 매번 그래프를 새로 발견해야 해서 느릴 수 있습니다. 이를 줄이려고 **ros2 daemon**(데몬: 백그라운드에서 계속 떠서 발견한 노드와 토픽 정보를 모아 두는 프로세스)을 씁니다. `ros2 node list` 같은 명령은 daemon이 떠 있으면 daemon에게 물어보고 바로 답을 받습니다. daemon은 master와 달리 없어도 노드끼리의 통신에는 아무 영향이 없습니다.
 
 비유: ROS 1의 master는 모든 전화번호를 관리하는 교환원이고, ROS 2의 DDS discovery는 같은 방에 들어온 사람들이 서로 큰 소리로 자기소개를 하는 방식입니다. daemon은 그 자기소개를 계속 받아 적어 두는 메모 담당입니다.
+
+**launch 파일과 `ros2 launch`.** `ros2 run`은 노드 하나를 띄우지만, 실제 로봇은 노드 수십 개가 이름과 재매핑과 파라미터를 맞춰 함께 떠야 합니다. launch 파일은 그 목록과 설정을 코드로 적어 둔 것입니다. launch 파일의 형식(Python, XML, YAML)은 2장에서 소개했고, 이 장은 세 형식이 같은 일을 하는 것을 비교합니다. Python 형식에서 `ros2 launch`는 `generate_launch_description()` 함수를 찾아 부르고, 그 함수가 돌려준 `LaunchDescription`의 항목(노드, 인자 선언, 다른 launch 파일 포함)을 차례로 실행합니다. 노드 코드가 아니라 "실행할 일의 목록을 만드는 프로그램"이라는 점이 핵심입니다.
+
+예:
+
+```python
+Node(package='basics', executable='topic_publisher', name='talker',
+     remappings=[('counter', topic)])
+```
+
+`name='talker'`는 노드 이름을 바꾸고(`-r __node:=talker`와 같습니다), `remappings`는 코드 안의 `counter`를 `topic` 인자 값으로 바꿉니다. 인자는 실행할 때 `ros2 launch basics counter.launch.py topic:=launch_counter`처럼 바꿉니다.
+
+launch 파일은 다른 launch 파일을 포함할 수 있습니다. 큰 시스템을 "센서", "내비게이션"처럼 작은 launch 파일로 나누고 위에서 이어 붙이는 방식이 이것입니다.
+
+```mermaid
+flowchart TB
+  inc[("counter_include.launch.py")] -->|"Node: talker"| talker("talker 노드")
+  inc -.->|"IncludeLaunchDescription<br/>topic 인자 my_counter"| lx[("listener.launch.xml")]
+  lx -->|"Node: listener"| listener("listener 노드")
+  talker -->|"std_msgs/Int32"| mc["/my_counter"]
+  mc --> listener
+```
+
+그림에서 볼 것: 위쪽 launch 파일이 `talker`를 직접 띄우고, 포함한 XML 파일이 `listener`를 띄웁니다. 포함하는 쪽이 `launch_arguments`로 `topic` 인자를 넘기므로 두 파일이 같은 토픽 이름을 쓰게 됩니다(실습 20-6).
+
+예:
+
+```python
+IncludeLaunchDescription(
+    AnyLaunchDescriptionSource(listener_file),
+    launch_arguments={'topic': 'my_counter'}.items())
+```
+
+`AnyLaunchDescriptionSource`는 Python, XML, YAML을 가리지 않고 읽으므로, 포함하는 파일과 포함되는 파일의 형식이 달라도 됩니다.
+
+**launch_testing.** 노드 하나의 단위 시험으로는 "노드끼리 이어졌을 때 값이 제대로 흐르는가"를 확인할 수 없습니다. launch_testing은 launch 파일처럼 노드를 띄우고, 노드가 준비되면 `unittest` 테스트를 돌리고, 끝나면 노드를 종료한 뒤 종료 코드까지 검사합니다. 이 장의 시험은 `topic_publisher`를 띄워 놓고 테스트 노드가 `counter`를 구독해 숫자가 1씩 늘어나는지 봅니다.
+
+```mermaid
+sequenceDiagram
+  participant lt as launch_test
+  participant tp as topic_publisher 노드
+  participant tc as TestCounter
+  lt->>tp: generate_test_description()의 Node를 띄움
+  lt->>tc: ReadyToTest 뒤에 테스트 시작
+  tp-->>tc: counter 토픽 Int32 메시지
+  tc->>tc: 세 개 이상 받았는지와 1씩 증가하는지 검사
+  lt->>tp: SIGINT로 종료
+  lt->>tc: post_shutdown_test로 종료 코드 검사
+```
+
+그림에서 볼 것: 노드를 띄우는 일(`generate_test_description`)과 검사하는 일(테스트 클래스)이 한 파일에 있고, 순서는 "띄움, 준비 신호, 검사, 종료, 종료 코드 검사"입니다. 같은 파일의 테스트 함수가 여러 개여도 노드는 처음 한 번만 뜹니다(5절 Q7).
+
+예:
+
+```python
+@pytest.mark.launch_test
+def generate_test_description():
+    talker = Node(package='basics', executable='topic_publisher', name='talker')
+    return LaunchDescription([talker, launch_testing.actions.ReadyToTest()])
+```
+
+`@pytest.mark.launch_test` 표시가 있어야 `colcon test`가 이 파일을 launch 테스트로 다룹니다. `ReadyToTest()`는 노드를 띄웠으니 테스트를 시작해도 된다는 신호입니다.
+
+### 코드와 폴더 구조
+
+이 장은 `basics` 패키지에 launch 파일과 테스트 파일을 더합니다. 2장의 구조에 이미 `launch/` 폴더와 `setup.py`의 launch 설치 줄이 있으므로, 이 장은 그 폴더에 파일을 늘리고 설치 줄이 `.launch.py` 말고 XML과 YAML도 담도록 바꿉니다. 노드 코드(`basics/` 안의 Python 모듈)는 바꾸지 않습니다. 아래는 이 장을 마친 뒤의 모습이고, 이 장에서 더하거나 고친 파일만 설명을 붙였습니다.
+
+```text
+~/rosbook_ws/src/basics/
+├── package.xml                      # exec_depend launch_ros, ros2launch (20-5), test_depend launch_testing 계열 (20-7)
+├── setup.py                         # data_files의 launch 설치 줄을 glob('launch/*')로 (20-5)
+├── basics/                          # 3장의 topic_publisher.py, topic_subscriber.py 등 (그대로)
+├── launch/                          # 2장의 launch 파일은 그대로 두고 아래 파일을 더함
+│   ├── counter.launch.py            # 노드 두 개 + 인자 + 재매핑 + 파라미터 (20-5)
+│   ├── counter.launch.xml           # 같은 내용의 XML 형식 (20-5)
+│   ├── counter.launch.yaml          # 같은 내용의 YAML 형식 (20-5)
+│   ├── listener.launch.xml          # 포함될 listener 전용 파일 (20-6)
+│   └── counter_include.launch.py    # 위 파일을 포함하는 Python 파일 (20-6)
+└── test/
+    └── test_counter_launch.py       # launch_testing 시험 (20-7)
+```
+
+- 설치 위치: `setup.py`의 `glob('launch/*')` 줄 때문에 빌드하면 `launch/` 파일이 `~/rosbook_ws/install/basics/share/basics/launch/`로 설치됩니다. `ros2 pkg prefix --share basics`가 알려 주는 `share` 폴더 아래입니다. 이 줄이 없으면 `ros2 launch`는 파일을 찾지 못합니다(4절). `--symlink-install`을 써도 새 파일은 다시 빌드해야 설치됩니다(5절 Q3).
+- `test/test_counter_launch.py`는 `data_files`에 넣지 않으므로 설치되지 않습니다. `launch_test`는 소스 경로를 직접 받아 실행하고, `colcon test`는 pytest로 패키지의 테스트를 모아 실행합니다. 같은 폴더에는 패키지 생성 때 만들어진 스타일 검사 테스트(flake8, pep257, copyright)가 이미 있어서 `colcon test-result`에 함께 집계됩니다.
+- 코드 뼈대의 차이: launch 파일은 `rclpy.spin`으로 도는 노드 코드가 아니라 `generate_launch_description()` 함수 하나로 이루어집니다. 테스트 파일은 `generate_test_description()`과 `unittest.TestCase` 클래스, 그리고 종료 후 시험 클래스로 이루어집니다. 둘 다 `setup.py`의 `console_scripts`에 등록하지 않습니다.
+
+### 실무 메모
+
+- **launch 인자로 달라지는 값을 바깥에 열어 둡니다.** 이 장의 `topic` 인자처럼 토픽 이름이나 시뮬레이션 여부 같은 값은 `DeclareLaunchArgument`로 선언하고 기본값을 둡니다. 코드를 고치지 않고 `ros2 launch ... 이름:=값`으로 바꿀 수 있고, `--show-args`로 어떤 인자가 있는지 누구나 확인할 수 있습니다.
+- **launch 파일 하나는 한 가지 역할만 맡깁니다.** 센서 하나, 내비게이션 하나처럼 나눠 두고 위에서 `IncludeLaunchDescription`으로 이어 붙이면 일부만 켜고 시험하기 쉽습니다.
+- **파라미터가 많아지면 YAML 파일로 둡니다.** 이 장의 `ros2 param dump`와 `--params-file`이 그 흐름입니다. 노드 이름 아래 `ros__parameters:` 구조이고, 노드가 선언하지 않은 이름은 무시되므로 오타를 조용히 놓치지 않게 `ros2 param list`로 확인하는 습관을 둡니다.
+- **통합 테스트는 사람이 눈으로 하던 확인을 반복 가능하게 만듭니다.** "talker를 띄우고 echo로 숫자가 오르는지 본다"를 `colcon test` 한 줄로 바꿔 두면 코드를 바꿀 때마다, 또는 자동 빌드(CI)에서 같은 확인을 합니다. 테스트에 10초 같은 제한 시간을 두는 것도 같은 이유로, 문제가 있을 때 영원히 멈추지 않고 실패로 끝나게 합니다.
+- **문제가 난 상황은 bag으로 남깁니다.** 로봇에서 이상한 동작을 봤다면 그때의 토픽을 `ros2 bag record`로 저장해 두고 나중에 재생해 launch 파일 없이도 재현합니다. 방법은 21장(실습 21-7)에서 다룹니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -683,3 +808,4 @@ ros2 service list -t
   - Ctrl+C로 launch를 멈출 때의 `KeyboardInterrupt` 트레이스백이 생기는 정확한 원인. 검증에서는 launch 프로세스에 SIGINT를 보내 재현했고, 학습자의 터미널 Ctrl+C와 완전히 같은 조건은 아닙니다.
   - `launch_arguments` 를 지웠을 때(Q6), `data_files` 를 뺐을 때, 테스트 토픽 오타의 실제 출력 문구.
   - Fast DDS에서의 동작. 이 가이드는 README의 안내대로 Cyclone DDS를 전제로 합니다.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
