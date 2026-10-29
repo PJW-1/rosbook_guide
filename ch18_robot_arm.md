@@ -66,7 +66,7 @@ xacro 파일이 `/tf`가 되기까지의 흐름은 다음과 같습니다.
 
 ```mermaid
 flowchart LR
-  xacro_file[("cougarbot.urdf.xacro")] -->|"use_gazebo 인자"| xacro_cmd[("xacro 명령")]
+  xacro_file[("cougarbot.urdf.xacro")] -->|"use_gazebo 인자<br/>18-2는 기본값 false, 18-3은 true"| xacro_cmd[("xacro 명령")]
   xacro_cmd -->|"URDF 문자열, robot_description 파라미터"| rsp("robot_state_publisher 노드")
   rsp --> desc["/robot_description"]
   desc --> jsp_gui("joint_state_publisher_gui 노드<br/>실습 18-2")
@@ -211,7 +211,7 @@ arm_controller:
 ### 실무 메모
 
 - 실제 로봇 프로젝트는 보통 패키지를 역할별로 나눕니다. 모델(URDF, 메시)을 담는 description 패키지, 하드웨어 설정과 launch를 담는 bringup 패키지, MSA가 만드는 moveit_config 패키지입니다. 이 장은 학습용이라 앞의 둘을 `cougarbot` 하나에 합쳤습니다. 나누어 두면 모델만 필요한 쪽(rviz2, 다른 로봇과의 조립)이 bringup의 의존성을 끌고 오지 않습니다.
-- 하드웨어 플러그인만 바꿔 mock, 시뮬, 실물을 오가는 구조 덕분에, 컨트롤러 설정과 MoveIt 설정을 mock 하드웨어나 Gazebo에서 먼저 맞춰 둔 뒤 실물에서는 하드웨어 플러그인만 확인하면 됩니다.
+- 하드웨어 플러그인만 바꿔 mock, 시뮬, 실물을 오가는 구조 덕분에, 컨트롤러 설정과 MoveIt 설정을 mock 하드웨어나 Gazebo에서 먼저 맞춰 둘 수 있습니다. 다만 실물로 옮길 때는 하드웨어 플러그인만 보면 안 됩니다. 관절의 회전 방향과 영점, 관절 한계, MoveIt의 속도·가속도 제한(`config/joint_limits.yaml`), 충돌 검사에 쓰는 주변 환경, 비상 정지 수단을 실물 기준으로 다시 확인하고, 처음에는 느린 속도로 움직여 봅니다.
 - 관절 한계(`<limit lower upper effort velocity>`)는 URDF에 실제 기구의 값대로 정확히 적습니다. Gazebo와 MoveIt이 이 값을 함께 쓰므로, 틀리면 시뮬에서는 되던 계획이 실물에서는 기구 한계에 부딪힙니다.
 - 컨트롤러 이름 하나(`arm_controller`)가 `controllers.yaml`, spawner 인자, `moveit_controllers.yaml`, 액션 이름 네 곳에 나옵니다. 이름을 바꿀 때는 네 곳을 함께 바꾸고, `ros2 control list_controllers`와 `ros2 action list -t`로 확인합니다.
 - 시뮬레이터를 쓰는 launch 파일에서는 시뮬 시각을 쓰는 모든 노드에 `use_sim_time`을 줍니다. ROS 2에는 전역 파라미터가 없으므로(2절) 하나라도 빠지면 tf가 오래되었다는 경고처럼 원인을 찾기 어려운 증상이 납니다.

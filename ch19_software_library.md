@@ -10,7 +10,7 @@ ROS를 모르는 라이브러리(여기서는 음성 합성 프로그램)를 노
 
 ```mermaid
 flowchart LR
-  client("speech_client 노드") -->|"goal: sentence"| speak[/"/speak 액션<br/>basics_interfaces/action/Talk"/]
+  client("speaker_client 노드<br/>speech_client") -->|"goal: sentence"| speak[/"/speak 액션<br/>basics_interfaces/action/Talk"/]
   speak --> server("speaker 노드<br/>speech_server")
   server -->|"result와 status"| speak
   params[("파라미터<br/>volume, rate, voice, preempt, wav_dir")] -.-> server
@@ -38,7 +38,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  c1("speech_client 노드")
+  c1("speaker_client 노드")
   c2("client2 노드")
   cli("ros2 action send_goal")
   speak[/"/speak 액션"/]
@@ -69,7 +69,7 @@ cmd = [self.engine,
 
 ```mermaid
 sequenceDiagram
-  participant c as speech_client 노드
+  participant c as speaker_client 노드
   participant a as 액션 서버 콜백
   participant x as 실행 콜백
   c->>a: send_goal 요청 (sentence)

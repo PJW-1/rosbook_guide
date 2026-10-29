@@ -83,17 +83,17 @@ flowchart TB
   params[("nav2_params.yaml<br/>기본 파일을 복사한 것")]
   fix1["robot_base_frame<br/>base_link → base_footprint<br/>4곳"]
   fix2["robot_radius<br/>0.22 → 0.20<br/>2곳"]
-  fix3["cmd_vel 타입<br/>Nav2 출력과 브리지 yaml이 같아야 함"]
   keep1["amcl 좌표계 이름<br/>이미 같아서 그대로"]
   keep2["scan 토픽 이름<br/>이미 같아서 그대로"]
+  keep3["cmd_vel 타입<br/>Nav2 기본 Twist, 브리지도 Twist라 그대로"]
   params -.-> fix1
   params -.-> fix2
-  params -.-> fix3
   params -.-> keep1
   params -.-> keep2
+  params -.-> keep3
 ```
 
-그림에서 볼 것: 고치는 곳은 프레임 이름, 로봇 크기, 속도 명령 타입 세 종류입니다. 토픽 이름과 amcl의 프레임 이름은 표준 이름을 지켰기 때문에 고칠 필요가 없었습니다.
+그림에서 볼 것: 고치는 곳은 프레임 이름과 로봇 크기 두 종류입니다. 토픽 이름과 amcl의 프레임 이름은 표준 이름을 지켰기 때문에 고칠 필요가 없었습니다. 속도 명령 타입도 Nav2 기본값(`Twist`)과 이 로봇의 브리지가 이미 같아서 그대로 둡니다. 다만 다른 로봇에 옮길 때는 Nav2 출력과 브리지 yaml의 타입이 같은지 꼭 확인합니다.
 
 예: 17-4에서 실제로 바뀌는 줄입니다.
 

@@ -111,8 +111,8 @@ from basics_interfaces.msg import Complex
 │   ├── CMakeLists.txt       rosidl_generate_interfaces로 코드 생성을 지시합니다
 │   ├── package.xml          rosidl 생성기, 런타임 의존성과 member_of_group
 │   ├── msg/Complex.msg      메시지 정의 (float32 real, float32 imaginary)
-│   ├── include/basics_interfaces/   생성기가 만든 빈 폴더, 쓰지 않습니다
-│   ├── src/                 생성기가 만든 빈 폴더, 쓰지 않습니다
+│   ├── include/basics_interfaces/   ros2 pkg create가 만든 빈 폴더, 쓰지 않습니다
+│   ├── src/                 ros2 pkg create가 만든 빈 폴더, 쓰지 않습니다
 │   └── LICENSE
 └── basics/                  ament_python, 2장의 구조에 노드 파일이 더해집니다
     ├── basics/
