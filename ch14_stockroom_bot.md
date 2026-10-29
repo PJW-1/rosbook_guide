@@ -6,25 +6,166 @@
 
 ## 이 장에서 체감할 구조
 
+```mermaid
+flowchart LR
+  image_bridge("image_bridge 노드") --> image["/camera/image_raw"]
+  image --> finder("marker_finder 노드")
+  finder -->|"std_msgs/msg/Float32"| error["/marker/error"]
+  error --> fetch("fetch_item 노드")
+  fetch -->|"TwistStamped"| cmd_vel["/cmd_vel"]
+  cmd_vel --> bridge("parameter_bridge 노드")
+  bridge --> robot[("Gazebo의 로봇")]
+  fetch --> nav[/"/navigate_to_pose 액션<br/>nav2_msgs/action/NavigateToPose"/]
+  nav --> bt("bt_navigator 노드, Nav2")
+  fetch --> grip[/"/gripper_cmd 액션<br/>control_msgs/action/GripperCommand"/]
+  grip --> fake_gripper("fake_gripper 노드")
 ```
-                 /camera/image_raw                  /marker/error (std_msgs/msg/Float32)
-image_bridge ──────────────────────> marker_finder ─────────────────────────────┐
-                                                                                 v
-bt_navigator (Nav2) <══ /navigate_to_pose (nav2_msgs/action/NavigateToPose) ══ fetch_item ──/cmd_vel (TwistStamped)──> parameter_bridge ──> 로봇
-fake_gripper        <══ /gripper_cmd (control_msgs/action/GripperCommand) ════╝
-```
-`──>`는 토픽, `<══`는 액션입니다. `fetch_item`은 "선반으로 이동, 표시에 맞춰 정렬, 집기, 카운터로 이동, 내려놓기, 복귀"를 차례로 실행하는 지휘자이고, 각 단계의 실제 일은 다른 노드가 합니다.
+네모 상자는 토픽, 평행사변형은 액션입니다. 액션 화살표는 클라이언트에서 서버 쪽으로 그렸습니다. `fetch_item`은 "선반으로 이동, 표시에 맞춰 정렬, 집기, 카운터로 이동, 내려놓기, 복귀"를 차례로 실행하는 지휘자이고, 각 단계의 실제 일은 다른 노드가 합니다.
 
 ## 1. 목표와 개념
 
 원서는 팔이 달린 Fetch 로봇으로 창고 선반의 물건을 집어 오는 큰 과제를 다룹니다. 이 장은 같은 구조를 TurtleBot3 시뮬에서 줄여서 만듭니다.
 
 - **작업 분해**: 큰 임무를 "이동", "인식", "조작"으로 나누고, 각각을 독립된 노드와 인터페이스(액션, 토픽)로 만듭니다. 지휘 노드는 인터페이스만 알고 내부 구현은 모릅니다.
+
+가져오기 임무를 단계 순서로 그리면 다음과 같습니다. 괄호 안은 그 단계가 쓰는 인터페이스입니다.
+
+```mermaid
+stateDiagram-v2
+  state "선반으로 이동 (navigate_to_pose 액션)" as go_shelf
+  state "표시에 맞춰 정렬 (marker/error 구독, cmd_vel 발행)" as align
+  state "그리퍼 열기 (gripper_cmd 액션)" as open_grip
+  state "그리퍼 닫기 (gripper_cmd 액션)" as close_grip
+  state "카운터로 이동 (navigate_to_pose 액션)" as go_counter
+  state "내려놓기 (gripper_cmd 액션)" as release
+  state "복귀 (navigate_to_pose 액션)" as go_home
+  [*] --> go_shelf
+  go_shelf --> align : 성공
+  align --> open_grip : 성공
+  open_grip --> close_grip : 성공
+  close_grip --> go_counter : 성공
+  go_counter --> release : 성공
+  release --> go_home : 성공
+  go_home --> [*] : mission complete
+```
+
+그림에서 볼 것: 화살표는 모두 "성공하면 다음"입니다. 어느 단계든 실패하면 `failed: 단계 이름`을 로그로 남기고 그 자리에서 임무를 끝냅니다. 같은 인터페이스(`navigate_to_pose`, `gripper_cmd`)를 여러 단계가 목표 값만 바꿔 다시 씁니다.
+
+예:
+
+```python
+steps = [
+    ('go to shelf', lambda: self.navigate(*shelf)),
+    ('align with marker', self.align),
+```
+
+`fetch_item.py`의 `run()`은 이렇게 단계 이름과 함수의 쌍을 목록으로 적고, 각 함수가 `True`나 `False`를 돌려주게 합니다.
+
 - **표시(marker) 인식**: 선반마다 색 패널을 붙이고, 카메라 이미지에서 그 색의 무게중심이 화면 중앙에서 얼마나 벗어났는지를 -1~1 값으로 발행합니다. 원서의 AR 태그 인식을 색 인식으로 바꾼 것입니다.
+
+예:
+
+```python
+self.error_pub.publish(Float32(data=float((cx - half) / half)))
+```
+
+`marker_finder.py`는 무게중심의 x 좌표(`cx`)를 화면 폭의 절반(`half`)으로 나눠, 해상도와 상관없는 -1~1 값 하나만 내보냅니다. 지휘 노드는 이미지를 몰라도 됩니다.
+
 - **시각 정렬(visual servoing)**: 인식 결과를 보고 로봇을 조금씩 돌려 표시를 화면 가운데에 맞춥니다. 지도 기반 이동은 수 cm 오차가 있으므로 마지막 맞춤은 센서로 합니다.
+
+예:
+
+```python
+cmd.twist.angular.z = -self.get_parameter('kp').value * self.error
+```
+
+`fetch_item.py`의 `align`에 있는 비례 제어 한 줄입니다. 표시가 오른쪽(오차 양수)에 있으면 음수 각속도, 즉 오른쪽으로 돌고, 오차가 줄수록 회전도 느려집니다.
+
 - **가짜 그리퍼**: 실제 팔 대신 `control_msgs/action/GripperCommand` 액션 서버를 흉내 내는 노드입니다. 실제 그리퍼 드라이버(ros2_control의 그리퍼 컨트롤러)와 같은 인터페이스를 쓰므로, 나중에 진짜로 바꿔도 지휘 노드는 그대로입니다.
 
+### 가짜 서버를 진짜 서버 자리에 끼우기
+
+`fetch_item`이 아는 것은 액션 이름과 타입뿐입니다. 그래서 그 이름과 타입으로 서버를 띄우기만 하면 가짜든 진짜든 같은 자리에 끼울 수 있습니다.
+
+```mermaid
+flowchart LR
+  fetch("fetch_item 노드") --> nav[/"/navigate_to_pose 액션"/]
+  fetch --> grip[/"/gripper_cmd 액션"/]
+  nav --> fake_nav("fake_nav 노드<br/>13장, 실습 14-6")
+  nav -.-> bt("bt_navigator 노드<br/>Nav2, 실습 14-7")
+  grip --> fake_gripper("fake_gripper 노드<br/>실습 14-5")
+  grip -.-> real_gripper("ros2_control 그리퍼 컨트롤러<br/>이 장에서는 쓰지 않음")
+```
+
+그림에서 볼 것: 실선은 지금 쓰는 서버, 점선은 그 자리에 대신 들어갈 서버입니다. 한 이름에는 한 번에 서버 하나만 띄웁니다. 이동 쪽은 실습 14-6에서 `fake_nav`, 실습 14-7에서 `bt_navigator`로 바꾸고, `fetch_item`의 코드는 한 줄도 바꾸지 않습니다.
+
+예:
+
+```python
+self.server = ActionServer(self, GripperCommand, 'gripper_cmd', self.execute)
+self.gripper = ActionClient(self, GripperCommand, 'gripper_cmd')
+```
+
+위는 `fake_gripper.py`, 아래는 `fetch_item.py`의 줄입니다. 두 줄의 타입(`GripperCommand`)과 이름(`'gripper_cmd'`)이 같다는 것이 둘 사이의 약속 전부입니다.
+
+같은 이름의 액션 서버가 둘 떠 있으면 이 약속이 깨집니다. 예를 들어 실습 14-6의 `fake_nav`를 끄지 않은 채 Nav2를 띄우면 다음 일이 생깁니다.
+
+```mermaid
+sequenceDiagram
+  participant f as fetch_item
+  participant fake as fake_nav
+  participant bt as bt_navigator
+  f->>fake: NavigateToPose goal
+  f->>bt: 같은 goal이 이쪽에도 전달됨
+  fake-->>f: 0.5초 뒤 성공 결과
+  Note over f: 로봇이 아직 선반에 가지 않았는데 다음 단계로 넘어갈 수 있음
+  bt-->>f: 실제 주행이 끝난 뒤의 결과
+```
+
+그림에서 볼 것: 목표 요청이 두 서버에 모두 전달되므로, `fetch_item`이 어느 쪽 결과를 받게 될지 알 수 없습니다. 그래서 실습 14-6과 14-7은 시작하기 전에 `ros2 action list`로 남아 있는 서버가 없는지부터 확인합니다.
+
+예:
+
+```bash
+ros2 action info /navigate_to_pose
+```
+
+출력의 `Action servers:` 개수가 1이어야 합니다. 2 이상이면 같은 이름의 서버를 띄운 터미널을 찾아 끕니다.
+
 비유: 식당 홀 매니저(fetch_item)는 "3번 테이블로 가서, 주문서를 확인하고, 접시를 받아 와"라고 순서만 정하고, 길 찾기·주문서 읽기·접시 들기는 각 담당자가 합니다. 접시 담당이 신입(가짜 그리퍼)이어도 주문 방식만 같으면 매니저는 바뀔 것이 없습니다.
+
+### 코드와 폴더 구조
+
+이 장을 마친 뒤의 `stockroom_bot` 패키지는 다음과 같습니다. `ros2 pkg create`가 만든 파일(`setup.cfg`, `resource/stockroom_bot`, `stockroom_bot/__init__.py`, `test/`의 코드 검사)은 손대지 않으므로 줄였습니다.
+
+```text
+~/rosbook_ws/src/stockroom_bot/
+├── package.xml                 의존성. launch가 12장 패키지를 쓰므로 follow_bot도 적음 (14-2)
+├── setup.py                    launch와 worlds 폴더 설치, 실행 파일 3개 등록 (14-2)
+├── worlds/
+│   └── stockroom.sdf           방, 색 패널이 붙은 선반 3개, 카운터 (14-2)
+├── launch/
+│   ├── stockroom.launch.py     12장 course.launch.py를 world 인자만 바꿔 include (14-2)
+│   └── fetch.launch.py         marker_finder, fake_gripper, fetch_item을 함께 띄움 (14-6)
+└── stockroom_bot/
+    ├── marker_finder.py        카메라 이미지에서 색 표시를 찾아 /marker/error 발행 (14-4)
+    ├── fake_gripper.py         /gripper_cmd 액션 서버 흉내 (14-5)
+    └── fetch_item.py           단계 목록을 차례로 실행하는 지휘 노드 (14-6)
+
+~/rosbook_ws/maps/stockroom.pgm, stockroom.yaml    패키지 밖에 저장한 창고 지도 (14-3)
+```
+
+- 패키지 사이의 관계: `stockroom_bot`의 launch는 12장 `follow_bot`의 launch 파일을 다시 쓰고, 흐름 시험에는 13장 `patrol`의 `fake_nav`를 따로 띄웁니다. `fake_nav`는 실행할 때만 쓰는 도구이므로 `package.xml`에는 `follow_bot`만 적습니다.
+- 노드 뼈대: `marker_finder`와 `fake_gripper`는 이 가이드의 기본 노드 형태(CONVENTIONS.md 6절) 그대로 `rclpy.spin`으로 콜백을 기다립니다. `fetch_item`만 다릅니다. 별도 스레드가 executor를 spin하고, 메인 스레드는 `run()`의 단계를 차례로 기다립니다. 13장 `patrol_fsm`과 같은 구조입니다.
+- 지휘 노드는 Nav2 내부(10장)를 모릅니다. `NavigateToPose` 목표를 채우는 방법은 10장, 13장과 같고, 이 장에서 새로 더해지는 것은 인식 토픽과 그리퍼 액션입니다.
+
+### 실무 메모
+
+- 개발 순서는 "인터페이스(액션과 토픽의 이름, 타입)를 먼저 정하고, 가짜 서버로 지휘 노드를 시험한 뒤, 진짜 서버로 바꾸기"입니다. 10장, 13장, 이 장이 모두 이 순서를 따릅니다. 시뮬이나 실물 로봇을 띄우지 않고도 흐름과 실패 처리를 먼저 다듬을 수 있습니다.
+- 실행 전에 `ros2 action list -t`와 `ros2 action info <액션 이름>`으로 서버가 정확히 하나인지 확인하는 습관을 들입니다. 이전 실행에서 남은 가짜 서버는 오류 메시지 없이 결과만 이상하게 만들기 때문에 찾기 어렵습니다.
+- 서버를 기다릴 때는 `wait_for_server(timeout_sec=10.0)`처럼 항상 시간 제한을 두고, 실패하면 어느 단계에서 멈췄는지 로그로 남깁니다.
+- 선반 좌표처럼 현장마다 바뀌는 값은 코드 안 사전(`SHELVES`)보다 파라미터 파일로 빼는 것이 좋습니다(2절 표 참고). 지도를 다시 만들 때 코드를 고치지 않아도 됩니다.
+- 한 토픽(`/cmd_vel`)에 publisher가 둘 이상이면, 한 번에 하나만 명령을 내도록 단계를 나눕니다. 이 장은 정렬 중에 Nav2가 명령을 내지 않는다는 순서로 이것을 지킵니다. `ros2 topic info -v /cmd_vel`로 publisher 목록을 확인할 수 있습니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -903,3 +1044,4 @@ ros2 topic info -v /cmd_vel
   - 실습 14-7의 `SHELVES` 좌표가 실제 SLAM 지도에서 그대로 맞는지.
   - 4절의 타입 불일치(Float64), 카메라 QoS, `use_sim_time` 불일치, `color:=yellow` 증상은 실행하지 않은 예상입니다.
   - 합성 이미지 시험 중 한 번, `marker/error`가 몇 개 나온 뒤 끊겨 정렬이 실패한 적이 있습니다. 같은 조건으로 다시 실행했을 때는 재현되지 않았고 원인은 확인하지 못했습니다.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
