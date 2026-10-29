@@ -8,10 +8,22 @@
 내 노드 하나가 `/scan`(LaserScan)을 구독하고 `/cmd_vel`(TwistStamped)을 발행하면, 브리지를 거쳐 Gazebo의 로봇이 움직입니다.
 노드 안에서는 "콜백이 최신 센서값을 저장하고, 타이머가 그 값으로 명령을 낸다"는 두 갈래 흐름이 돕니다.
 
+```mermaid
+flowchart LR
+  gz[("Gazebo<br/>LiDAR, DiffDrive")]
+  bridge("ros_gz_bridge 노드")
+  scan["/scan"]
+  wander("wander 노드")
+  cmd["/cmd_vel"]
+  gz -->|"scan"| bridge
+  bridge --> scan
+  scan -->|"LaserScan"| wander
+  wander -->|"TwistStamped"| cmd
+  cmd --> bridge
+  bridge -->|"cmd_vel"| gz
 ```
- Gazebo LiDAR ─▶ /ros_gz_bridge ─▶ /scan ─▶ [wander] scan_callback ─▶ self.range_ahead
-                                                    timer(10 Hz) ──▶ /cmd_vel ─▶ /ros_gz_bridge ─▶ DiffDrive
-```
+
+그림에서 볼 것: 감지(`/scan`), 판단(`wander` 노드), 행동(`/cmd_vel`)이 한 바퀴 돌아 Gazebo로 되돌아오는 고리입니다. 내 코드는 가운데 노드 하나뿐이고 나머지는 6장에서 본 연결입니다.
 
 ## 1. 목표와 개념
 원서 7장은 세 단계로 "장애물 앞에서 돌아서는 로봇"을 만듭니다. 시간에 따라 멈춤과 전진을 바꾸는 노드(PDF p.120~122), 레이저에서 정면 거리를 읽는 노드(PDF p.123~126), 둘을 합친 배회 노드(PDF p.126~127)입니다. 이 가이드도 같은 세 단계를 rclpy로 새로 작성합니다.
@@ -22,6 +34,106 @@
 - **센서 데이터 QoS**: 센서 토픽은 최신 값이 중요하고 지난 값을 재전송할 이유가 적습니다. rclpy의 `qos_profile_sensor_data`는 BEST_EFFORT, KEEP_LAST 5, VOLATILE입니다. BEST_EFFORT subscriber는 RELIABLE publisher와도, BEST_EFFORT publisher와도 연결되므로 센서 구독에 쓰기 좋습니다.
 
 비유: 구독 콜백은 계기판의 바늘을 갱신하는 사람이고, 타이머는 0.1초마다 계기판을 보고 핸들을 조작하는 운전자입니다.
+
+**타이머가 루프를 대신합니다.** 주기 작업은 노드를 만들 때 한 번 등록하고, 이후 호출은 `spin`이 맡습니다.
+
+예:
+```python
+self.timer = self.create_timer(0.1, self.on_timer)
+```
+0.1초마다 `on_timer`가 불리므로 10 Hz로 `/cmd_vel`이 나갑니다. `while` 루프가 없으니 같은 노드의 구독 콜백도 막히지 않고 돕니다.
+
+**시간 비교는 `Time`과 `Duration`으로 합니다.**
+
+예:
+```python
+self.light_change_time = self.get_clock().now() + Duration(seconds=3.0)
+```
+`now()`에 `Duration`을 더하면 3초 뒤의 `Time`이 되고, `if now > self.light_change_time:`처럼 비교할 수 있습니다. 이 시계가 `use_sim_time`을 따르므로 Gazebo를 멈추면 이 3초도 멈춥니다.
+
+**한 노드 안의 두 갈래 흐름.** `wander` 노드에서는 구독 콜백과 타이머 콜백이 같은 객체의 변수 하나를 사이에 두고 만납니다. 콜백은 쓰기만, 타이머는 읽기만 합니다.
+
+```mermaid
+flowchart LR
+  scan["/scan"]
+  cb("scan_callback")
+  state["self.range_ahead"]
+  timer("on_timer, 10 Hz")
+  cmd["/cmd_vel"]
+  scan -->|"LaserScan"| cb
+  cb -->|"최소 거리 저장"| state
+  timer -.->|"읽음"| state
+  timer -->|"TwistStamped"| cmd
+```
+
+그림에서 볼 것: 이 그림의 `self.range_ahead`는 토픽이 아니라 노드 안의 변수입니다. 센서가 10 Hz로 오든 불규칙하게 오든, 명령은 타이머 주기대로 일정하게 나갑니다. 둘이 같은 실행기에서 차례로 불리므로 변수를 잠글 필요가 없습니다.
+
+예:
+```python
+self.range_ahead = min(valid) if valid else msg.range_max
+```
+```python
+if self.range_ahead < 0.8 or now > self.state_change_time:
+```
+첫 줄은 `scan_callback`의 마지막 줄이고, 둘째 줄은 `on_timer`가 그 값을 꺼내 쓰는 곳입니다.
+
+**배회 노드의 상태.** `wander`의 판단은 전진과 회전 두 상태를 `driving_forward` 변수로 구분하고, 상태마다 "언제 바뀌는가"를 시각(`state_change_time`)으로 기억합니다.
+
+```mermaid
+stateDiagram-v2
+  state "전진 0.2 m/s" as forward
+  state "제자리 회전 0.5 rad/s" as spin
+  [*] --> forward
+  forward --> spin : 정면 0.8 m 안에 장애물 또는 30초 경과
+  spin --> forward : 5초 경과
+```
+
+그림에서 볼 것: 회전에서 전진으로 돌아올 때 앞이 아직 막혀 있으면 다음 주기에 곧바로 다시 회전합니다(실습 7-5 관찰). 그래서 회전이 끝나는 조건은 시간 하나뿐입니다.
+
+**정면 인덱스는 메시지 안의 값으로 계산합니다.**
+
+예:
+```python
+index = round((0.0 - msg.angle_min) / msg.angle_increment)
+```
+Waffle Pi는 `angle_min`이 0이라 `index`가 0이고, 실습 7-4의 가짜 스캔은 `angle_min`이 -0.5라 2가 나옵니다. 같은 식이 두 센서에서 모두 정면을 고릅니다.
+
+**센서 구독에는 센서용 QoS를 씁니다.**
+
+예:
+```python
+self.scan_sub = self.create_subscription(
+    LaserScan, 'scan', self.scan_callback, qos_profile_sensor_data)
+```
+네 번째 인자가 숫자 `10` 대신 프로필입니다. 브리지가 내는 `/scan`은 RELIABLE이고 이 구독은 BEST_EFFORT인데도 연결되는 것을 `ros2 topic info -v /scan`으로 확인합니다.
+
+### 코드와 폴더 구조
+이 장에서 `~/rosbook_ws/src/wander_bot/` 패키지가 처음 생깁니다. ament_python 패키지의 기본 구조는 2장과 3장에서 설명했으므로, 이 장에서 더해지는 파일과 노드 코드의 달라진 점만 적습니다.
+
+```text
+wander_bot/
+├── package.xml                      7-1  의존성 rclpy, geometry_msgs, sensor_msgs
+├── setup.py                         7-1  생성, 7-2에서 entry_points에 노드 3개 등록
+├── setup.cfg                        7-1  실행 파일 설치 위치 지정
+├── resource/wander_bot              7-1  패키지 표식 파일
+├── test/                            7-1  코드 스타일 검사 3개
+└── wander_bot/
+    ├── __init__.py                  7-1  빈 파일
+    ├── red_light_green_light.py     7-2  시간만 보고 3초마다 정지와 전진
+    ├── range_ahead.py               7-4  /scan 구독, 정면 거리 출력
+    └── wander.py                    7-5  구독과 발행을 합친 배회 노드
+```
+
+- 빌드하면 실행 파일 세 개(`red_light_green_light`, `range_ahead`, `wander`)가 `install/wander_bot/lib/wander_bot/` 아래에 생기고, `ros2 run wander_bot wander`가 그것을 찾아 실행합니다. 이 위치는 3장에서 본 `install/basics/lib/basics/`와 같은 규칙입니다.
+- 노드 파일은 단계마다 하나씩 늘어납니다. `red_light_green_light`는 발행만, `range_ahead`는 구독만, `wander`는 둘을 한 클래스에 합칩니다. 앞 장까지는 publisher 노드와 subscriber 노드가 따로였고, 처음으로 한 노드가 입력과 출력을 모두 가집니다.
+- 3장 구조에 더해지는 것은 두 가지입니다. 하나는 구독 콜백과 타이머 콜백이 상태 변수를 공유하는 뼈대이고, 다른 하나는 `driving_forward`와 `state_change_time`으로 만든 상태 기계입니다. 노드의 `main`은 6절 기본 형태 그대로입니다.
+
+### 실무 메모
+- **센서 콜백은 짧게 끝냅니다.** 콜백이 오래 걸리면 같은 실행기의 타이머와 다른 콜백이 줄줄이 늦어집니다. 이 장의 `scan_callback`은 값을 계산해 저장만 하고, 명령은 타이머가 냅니다.
+- **속도 명령은 일정한 주기로 내고, 멈춤도 명령으로 보냅니다.** 정지 상태에서도 0을 계속 보내야 받는 쪽이 "멈추라"는 뜻인지 "끊겼다"는 뜻인지 구분할 수 있습니다. 이 장의 노드는 종료할 때 0을 보내지 않으므로(4절), 실제 로봇을 다룰 때는 종료 처리에서 정지 명령을 내는 것이 관례입니다.
+- **센서 구독은 `qos_profile_sensor_data`로 시작합니다.** 실제 센서 드라이버는 BEST_EFFORT로 내는 경우가 많고, 그러면 기본 QoS(RELIABLE)로 구독한 노드와는 연결되지 않습니다. 이 시뮬의 `/scan`은 RELIABLE이라 어느 쪽이든 연결되지만, 로봇을 바꿔도 되도록 센서용 프로필을 씁니다. 연결이 안 되면 `ros2 topic info -v`로 양쪽 Reliability부터 봅니다.
+- **먼저 가짜 입력으로 시험합니다.** 이 장처럼 `ros2 topic pub`으로 가짜 `/scan`을 넣어 노드의 판단을 확인하고 나서 시뮬에 붙이면, 코드 문제와 시뮬 문제를 나눠서 찾을 수 있습니다.
+- **고정 숫자는 한곳에 모읍니다.** 0.8 m, 30초, 0.2 m/s 같은 값이 코드 곳곳에 흩어져 있으면 바꾸기 어렵습니다. 다음 8장에서 이런 값을 파라미터로 뺍니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 | 원서 (ROS 1) | ROS 2 Jazzy | 이유와 주의점 |
@@ -448,3 +560,4 @@ Waffle Pi는 1도 간격이므로 정면 인덱스 0을 중심으로 -15~+15입�
   - `wander`를 강제 종료했을 때 TB3가 계속 움직이는지: TB3에서는 확인 못 함. 같은 `gz-sim-diff-drive-system`을 쓰는 16~17장 로봇의 검증에서는 publisher가 사라진 뒤에도 마지막 명령을 계속 수행했습니다.
   - rqt_graph 화면: 확인 못 함(GUI).
   - "QoS를 10으로 바꾼 range_ahead가 best_effort publisher를 못 받는다"는 행은 위 reliable echo 결과에서 유추했습니다. 노드 코드를 바꾼 실행은 하지 않았습니다.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
