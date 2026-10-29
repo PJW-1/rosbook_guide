@@ -22,38 +22,199 @@ sudo apt install ros-jazzy-ros2-control ros-jazzy-ros2-controllers ros-jazzy-gz-
 URDF 안의 `<ros2_control>` 태그가 "어떤 관절에 어떤 명령과 상태 인터페이스가 있는지"를 선언하고, controller_manager가 그 인터페이스를 컨트롤러에게 나눠 줍니다.
 컨트롤러를 바꾸지 않고 하드웨어 플러그인만 바꾸면 같은 팔이 Gazebo에서도, mock 하드웨어에서도 움직입니다.
 
+```mermaid
+flowchart TB
+  sender("ros2 topic pub, ros2 action send_goal, move_group")
+  sender --> traj_topic["/arm_controller/joint_trajectory"]
+  sender --> traj_action[/"/arm_controller/follow_joint_trajectory 액션"/]
+  subgraph cm["controller_manager: gz_ros2_control 플러그인이 Gazebo 안에서 띄움"]
+    arm_ctrl("arm_controller<br/>JointTrajectoryController")
+    jsb("joint_state_broadcaster")
+    rm("resource manager<br/>ros2_control 태그에서 읽은 인터페이스 목록")
+    hw[("하드웨어 플러그인<br/>GazeboSimSystem 또는 GenericSystem")]
+  end
+  traj_topic --> arm_ctrl
+  traj_action --> arm_ctrl
+  arm_ctrl -->|"command: hip/position ..."| rm
+  rm --> hw
+  hw --> rm
+  rm -->|"state: hip/position, hip/velocity ..."| jsb
+  jsb --> joint_states["/joint_states"]
+  joint_states --> rsp("robot_state_publisher 노드")
+  rsp --> tf["/tf"]
+  tf --> users("rviz2, move_group")
 ```
-  ros2 topic pub / ros2 action send_goal / move_group
-         │  /arm_controller/joint_trajectory (토픽)
-         │  /arm_controller/follow_joint_trajectory (액션)
-         ▼
- ┌─────────────────── controller_manager (gz_ros2_control 플러그인이 Gazebo 안에서 띄움) ──┐
- │  arm_controller (JointTrajectoryController)   joint_state_broadcaster                  │
- │        │ command: hip/position ...                 ▲ state: hip/position, hip/velocity ... │
- │        ▼                                           │                                    │
- │  resource manager: <ros2_control> 태그에서 읽은 인터페이스 목록                          │
- │  hardware interface 플러그인: gz_ros2_control/GazeboSimSystem 또는 mock GenericSystem    │
- └─────────────────────────────────────────────────────────────────────────────────────────┘
-         │ /joint_states
-         ▼
-  robot_state_publisher (URDF) ──▶ /tf ──▶ rviz2, move_group
-```
+
+그림에서 볼 것: 명령은 위에서 아래로(컨트롤러, resource manager, 하드웨어 플러그인) 내려가고, 상태는 아래에서 위로 joint_state_broadcaster를 거쳐 `/joint_states`로 올라옵니다. 하드웨어 플러그인 상자 하나만 바뀌어도 나머지 상자는 그대로입니다.
 
 ## 1. 목표와 개념
 
 11장에서는 남이 만든 팔(Panda)의 설정을 그대로 썼습니다. 이 장은 4관절 팔 CougarBot을 처음부터 만들어 MoveIt으로 움직이기까지의 단계를 밟습니다.
 
-- **xacro**: URDF에 변수, 계산식, 매크로를 쓸 수 있게 하는 전처리기입니다. 링크 네 개가 같은 원기둥 모양이므로 매크로 하나로 만듭니다.
+- **xacro**: URDF에 변수, 계산식, 매크로를 쓸 수 있게 하는 전처리기입니다. 링크 네 개가 같은 원기둥 모양이므로 매크로 하나로 만듭니다. URDF의 링크, 조인트, 원점의 뜻은 16장에서 다뤘습니다.
+
+예:
+
+```xml
+<xacro:arm_joint name="hip" parent="base_link" child="torso" axis="0 0 1"
+                 z="0.05" lower="${-pi}" upper="${pi}"/>
+```
+
+`cougarbot.urdf.xacro`에서 매크로를 부르는 줄입니다. xacro를 돌리면 이 한 줄이 `<joint name="hip" type="revolute">`와 그 안의 `parent`, `child`, `origin`, `axis`, `limit` 태그로 펼쳐집니다.
+
+xacro 파일이 `/tf`가 되기까지의 흐름은 다음과 같습니다.
+
+```mermaid
+flowchart LR
+  xacro_file[("cougarbot.urdf.xacro")] -->|"use_gazebo 인자"| xacro_cmd[("xacro 명령")]
+  xacro_cmd -->|"URDF 문자열, robot_description 파라미터"| rsp("robot_state_publisher 노드")
+  rsp --> desc["/robot_description"]
+  desc --> jsp_gui("joint_state_publisher_gui 노드<br/>실습 18-2")
+  desc --> spawn_model("ros_gz_sim create 노드<br/>실습 18-3")
+  jsp_gui --> joint_states["/joint_states"]
+  jsb("joint_state_broadcaster<br/>실습 18-3 이후") --> joint_states
+  joint_states --> rsp
+  rsp --> tf["/tf"]
+  rsp --> tf_static["/tf_static"]
+```
+
+그림에서 볼 것: robot_state_publisher는 URDF를 파라미터로 받아 `/robot_description` 토픽으로 다시 나눠 줍니다. 슬라이더 창과 Gazebo 모델 생성 노드는 그 토픽에서 URDF를 받습니다. `/joint_states`를 내는 쪽은 실습 18-2에서는 슬라이더 창, 실습 18-3부터는 joint_state_broadcaster로 바뀌지만 robot_state_publisher는 그 차이를 모릅니다.
+
 - **관성(inertial)**: 시뮬레이터가 링크를 움직이려면 질량과 관성 텐서가 필요합니다. rviz2는 모양만 쓰지만 Gazebo는 관성이 없으면 링크를 무시하거나 이상하게 움직입니다.
 - **ros2_control**: 컨트롤러와 하드웨어 드라이버 사이의 표준 틀입니다. 하드웨어 쪽은 관절마다 command interface(쓸 수 있는 값, 예: 목표 위치)와 state interface(읽을 수 있는 값, 예: 현재 위치, 속도)를 내놓습니다. 컨트롤러는 이 인터페이스를 이름으로 요청해 씁니다.
+
+예:
+
+```xml
+<command_interface name="position"/>
+<state_interface name="velocity"/>
+```
+
+URDF의 `<ros2_control>` 태그 안에서 관절마다 선언하는 줄입니다. `controllers.yaml`의 `command_interfaces`, `state_interfaces`는 여기 선언된 이름만 요청할 수 있습니다.
+
+하드웨어 플러그인은 xacro 인자 하나로 바꿔 끼웁니다.
+
+```mermaid
+flowchart TB
+  arg[("xacro 인자 use_gazebo")]
+  arg -->|"true"| gz_hw[("gz_ros2_control/GazeboSimSystem<br/>Gazebo의 관절을 움직임")]
+  arg -->|"false, 기본값"| mock_hw[("mock_components/GenericSystem<br/>명령을 그대로 상태로 돌려줌")]
+  gz_plugin[("Gazebo 플러그인 gz_ros2_control-system")] -.->|"Gazebo 안에서 띄움"| cm_gz("controller_manager<br/>gazebo.launch.py")
+  gz_hw --> cm_gz
+  mock_hw --> cm_mock("ros2_control_node<br/>MSA의 demo.launch.py, 이 장에서는 띄우지 않음")
+  cm_gz --> ctrls("arm_controller, joint_state_broadcaster")
+  cm_mock --> ctrls
+```
+
+그림에서 볼 것: 바뀌는 것은 하드웨어 플러그인과 controller_manager를 띄우는 주체뿐입니다. 컨트롤러 이름, 인터페이스 이름, 그 위의 토픽과 액션은 두 경우가 같습니다. 11장의 Panda 데모는 mock 쪽 길(`ros2_control_node`와 mock 하드웨어)을 쓴 예입니다.
+
 - **controller_manager**: 컨트롤러를 불러오고(load), 설정하고(configure), 켜고(activate) 끄는 노드입니다. 주기적으로 "하드웨어 읽기, 컨트롤러 계산, 하드웨어 쓰기"를 반복합니다.
+
+예:
+
+```python
+Node(package='controller_manager', executable='spawner', arguments=[name])
+```
+
+`gazebo.launch.py`에서 컨트롤러마다 spawner를 하나씩 띄우는 줄입니다. spawner는 controller_manager에게 "이 이름의 컨트롤러를 불러와 켜 달라"고 요청하고 끝나는 짧은 프로그램입니다.
+
 - **joint_trajectory_controller(JTC)**: 시간에 따른 관절 값 목록(궤적)을 받아 보간하며 따라가는 컨트롤러입니다. MoveIt이 실행할 때 쓰는 컨트롤러입니다.
+
+예:
+
+```bash
+ros2 topic pub --once /arm_controller/joint_trajectory trajectory_msgs/msg/JointTrajectory "{joint_names: [hip, shoulder, elbow, wrist], points: [{positions: [0.5, 0.6, 0.8, 0.4], time_from_start: {sec: 2}}]}"
+```
+
+실습 18-4의 명령입니다. 궤적 점 하나에 "2초 뒤 이 관절 값"을 적으면 JTC가 지금 값에서 그 값까지 사이를 보간해 따라갑니다.
+
 - **joint_state_broadcaster**: 상태 인터페이스 값을 읽어 `/joint_states`로 내보내는 컨트롤러입니다. 이름은 컨트롤러지만 명령은 내리지 않습니다.
 - **MoveIt Setup Assistant(MSA)**: URDF를 읽어 SRDF(플래닝 그룹, 자기충돌 무시 쌍, 이름 붙인 자세)와 설정 파일을 담은 `*_moveit_config` 패키지를 만들어 주는 GUI 도구입니다.
+
+MSA가 만든 설정 패키지와 move_group의 관계는 다음과 같습니다.
+
+```mermaid
+flowchart LR
+  xacro_file[("cougarbot.urdf.xacro<br/>install 폴더의 것")] --> msa[("MoveIt Setup Assistant")]
+  msa --> srdf[("config/cougarbot.srdf")]
+  msa --> kin[("config/kinematics.yaml")]
+  msa --> mctrl[("config/moveit_controllers.yaml")]
+  srdf --> launch_file[("gz_moveit.launch.py<br/>MoveItConfigsBuilder")]
+  kin --> launch_file
+  mctrl --> launch_file
+  launch_file -->|"파라미터"| mg("move_group 노드")
+  mg --> fjt[/"/arm_controller/follow_joint_trajectory 액션"/]
+  fjt --> arm_ctrl("arm_controller")
+```
+
+그림에서 볼 것: MSA는 실행 중에 쓰이는 프로그램이 아니라 설정 파일을 만드는 도구입니다. move_group은 MSA를 모르고, launch 파일이 읽어 넘긴 파라미터만 압니다. 그 파라미터 중 `moveit_controllers.yaml`이 ros2_control 쪽 컨트롤러와 이어지는 유일한 연결점입니다.
+
+예:
+
+```yaml
+  arm_controller:
+    type: FollowJointTrajectory
+    action_ns: follow_joint_trajectory
+```
+
+`moveit_controllers.yaml`의 일부입니다. move_group은 컨트롤러 이름과 `action_ns`로 실행을 맡길 액션 서버를 찾으므로, 이 이름이 `controllers.yaml`의 컨트롤러 이름과 같아야 합니다.
 
 비유: ros2_control의 하드웨어 인터페이스는 콘센트이고, 컨트롤러는 플러그입니다. 콘센트 모양(인터페이스 이름)만 맞으면 벽 뒤가 실제 모터든 Gazebo든 플러그는 그대로 꽂힙니다.
 
 CougarBot은 바닥(`base_link`) 위에 몸통 회전(`hip`, z축), 어깨(`shoulder`, y축), 팔꿈치(`elbow`, y축), 손목(`wrist`, y축)이 차례로 이어진 4관절 팔입니다. 손 끝 자세는 6개 값이 필요한데 관절이 4개뿐이므로, 임의의 손 방향을 맞출 수는 없고 위치 위주로 목표를 줍니다.
+
+### 코드와 폴더 구조
+
+이 장은 Python 노드를 하나도 만들지 않습니다. 모델, 설정, launch 파일만으로 팔이 움직이고, 그 파일들이 두 패키지에 나뉘어 있습니다. `ros2 pkg create`와 MSA가 만든 뒤 손대지 않는 파일은 줄였습니다.
+
+```text
+~/rosbook_ws/src/cougarbot/                    ament_cmake, 직접 만듦
+├── CMakeLists.txt             install(DIRECTORY config launch urdf ...) 추가 (18-2)
+├── package.xml                xacro, gz_ros2_control, 컨트롤러 등 실행 의존성 (18-2)
+├── urdf/
+│   └── cougarbot.urdf.xacro   링크, 조인트, ros2_control 태그, Gazebo 플러그인 (18-1, 18-3)
+├── config/
+│   └── controllers.yaml       controller_manager와 arm_controller의 파라미터 (18-3)
+└── launch/
+    ├── display.launch.py      robot_state_publisher, 슬라이더 창, rviz2 (18-2)
+    └── gazebo.launch.py       Gazebo, robot_state_publisher, 모델 생성, /clock 브리지, spawner (18-3)
+
+~/rosbook_ws/src/cougarbot_moveit_config/      ament_cmake, MSA가 만듦 (18-6)
+├── CMakeLists.txt, package.xml
+├── config/
+│   ├── cougarbot.srdf         플래닝 그룹 arm, 자세 home, 충돌 검사에서 뺄 링크 쌍
+│   ├── kinematics.yaml        IK 플러그인 설정. position_only_ik를 직접 추가 (18-6)
+│   ├── moveit_controllers.yaml  move_group이 실행을 맡길 컨트롤러 이름과 액션
+│   ├── moveit.rviz            MotionPlanning 패널이 있는 rviz2 화면 설정
+│   └── ...                    그 밖의 설정 파일 (ls config로 확인)
+└── launch/
+    ├── demo.launch.py         MSA가 만든 mock 하드웨어용 데모. 이 장에서는 쓰지 않음
+    ├── gz_moveit.launch.py    Gazebo용으로 move_group과 rviz2만 띄움, 직접 만듦 (18-7)
+    └── ...
+```
+
+- 설치 위치: ament_python 패키지는 `setup.py`의 `data_files`로 파일을 설치했지만, ament_cmake 패키지는 `CMakeLists.txt`의 `install(DIRECTORY config launch urdf DESTINATION share/${PROJECT_NAME})`로 설치합니다. 빌드하면 `install/cougarbot/share/cougarbot/urdf/cougarbot.urdf.xacro`처럼 놓이고, launch 파일의 `get_package_share_directory('cougarbot')`와 xacro의 `$(find cougarbot)`, 그리고 MSA가 여는 파일이 모두 이 설치 위치를 가리킵니다.
+- 컨트롤러 YAML의 구조: 최상위 키는 노드 이름이고, 그 아래에 `ros__parameters`가 옵니다. `controller_manager` 아래에는 "어떤 이름의 컨트롤러가 어떤 타입인지"를, 각 컨트롤러 이름 아래에는 "어느 관절의 어떤 인터페이스를 쓸지"를 적습니다.
+
+```yaml
+controller_manager:
+  ros__parameters:
+    arm_controller:
+      type: joint_trajectory_controller/JointTrajectoryController
+arm_controller:
+  ros__parameters:
+    joints: [hip, shoulder, elbow, wrist]
+```
+
+실습 18-3의 `controllers.yaml`을 구조만 보이도록 줄인 것입니다. 실제 파일은 `joints`를 한 줄에 하나씩 적고 `command_interfaces`, `state_interfaces`도 둡니다.
+
+### 실무 메모
+
+- 실제 로봇 프로젝트는 보통 패키지를 역할별로 나눕니다. 모델(URDF, 메시)을 담는 description 패키지, 하드웨어 설정과 launch를 담는 bringup 패키지, MSA가 만드는 moveit_config 패키지입니다. 이 장은 학습용이라 앞의 둘을 `cougarbot` 하나에 합쳤습니다. 나누어 두면 모델만 필요한 쪽(rviz2, 다른 로봇과의 조립)이 bringup의 의존성을 끌고 오지 않습니다.
+- 하드웨어 플러그인만 바꿔 mock, 시뮬, 실물을 오가는 구조 덕분에, 컨트롤러 설정과 MoveIt 설정을 mock 하드웨어나 Gazebo에서 먼저 맞춰 둔 뒤 실물에서는 하드웨어 플러그인만 확인하면 됩니다.
+- 관절 한계(`<limit lower upper effort velocity>`)는 URDF에 실제 기구의 값대로 정확히 적습니다. Gazebo와 MoveIt이 이 값을 함께 쓰므로, 틀리면 시뮬에서는 되던 계획이 실물에서는 기구 한계에 부딪힙니다.
+- 컨트롤러 이름 하나(`arm_controller`)가 `controllers.yaml`, spawner 인자, `moveit_controllers.yaml`, 액션 이름 네 곳에 나옵니다. 이름을 바꿀 때는 네 곳을 함께 바꾸고, `ros2 control list_controllers`와 `ros2 action list -t`로 확인합니다.
+- 시뮬레이터를 쓰는 launch 파일에서는 시뮬 시각을 쓰는 모든 노드에 `use_sim_time`을 줍니다. ROS 2에는 전역 파라미터가 없으므로(2절) 하나라도 빠지면 tf가 오래되었다는 경고처럼 원인을 찾기 어려운 증상이 납니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -780,3 +941,4 @@ ros2 action info /arm_controller/follow_joint_trajectory
   - gz_ros2_control, ros2_control, ros2_controllers, ros2controlcli가 설치되지 않아 실습 18-3~18-5의 실제 동작(controller_manager 기동, 컨트롤러 활성화, `ros2 control` 출력 모양, `/arm_controller/joint_trajectory` 토픽 이름, 궤적 실행, 4절의 증상)을 확인하지 못했습니다.
   - Gazebo, rviz2, rqt_plot, joint_state_publisher_gui, MoveIt Setup Assistant 화면: 확인 못 함(GUI).
   - MSA가 만드는 파일 이름과 내용(`moveit_controllers.yaml` 모양, CMakeLists의 install, ros2_control 단계 동작), `position_only_ik` 설정, `gz_moveit.launch.py`(moveit_configs_utils 미설치): 확인 못 함.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
