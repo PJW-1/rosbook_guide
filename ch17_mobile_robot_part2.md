@@ -8,10 +8,20 @@
 
 Nav2는 로봇이 누구인지 묻지 않고, 좌표 변환 트리(`map → odom → base_footprint → laser_link`), `/scan`, `/odom`, 그리고 `/cmd_vel`의 타입만 봅니다. 이 넷을 맞추는 일이 "내 로봇에 내비게이션 붙이기"의 전부입니다.
 
-```
-[map_server] /map ─┐
-[amcl] map→odom ───┼─> [planner] -> [controller] -> /cmd_vel_nav -> [velocity_smoother] -> /cmd_vel_smoothed
-/scan, /odom, /tf ─┘                                             -> [collision_monitor] -> /cmd_vel (Twist) -> [ros_gz_bridge] -> Gazebo
+```mermaid
+flowchart LR
+  scan["/scan"] --> amcl("amcl")
+  odom["/odom"] --> amcl
+  map["/map"] --> amcl
+  amcl -->|"map → odom"| tf["/tf"]
+  tf --> ctrl("planner_server<br/>controller_server")
+  scan --> ctrl
+  ctrl --> nav["/cmd_vel_nav"]
+  nav --> vs("velocity_smoother")
+  vs --> sm["/cmd_vel_smoothed"]
+  sm --> cm("collision_monitor")
+  cm -->|"Twist"| cmd["/cmd_vel"]
+  cmd --> br("ros_gz_bridge<br/>Gazebo")
 ```
 
 ## 1. 목표와 개념
@@ -24,6 +34,110 @@ Nav2는 로봇이 누구인지 묻지 않고, 좌표 변환 트리(`map → odom
 - 위치 추정과 목표: amcl에 초기 위치를 알려 주고, 목표 자세를 액션으로 보냅니다.
 
 비유: Nav2는 렌터카를 받은 운전자와 같습니다. 차종은 상관없지만, 차 크기(robot_radius), 계기판 위치(좌표계 이름), 페달 규격(`/cmd_vel` 타입)은 알려 줘야 합니다.
+
+### 내 로봇이 Nav2에 보여야 하는 것
+
+16장의 `tortoisebot` 시뮬에 레이저를 더하면, 9장과 10장에서 TurtleBot3로 쓴 Nav2가 로봇을 바꿔도 같은 토픽과 같은 좌표계 이름으로 연결됩니다. Nav2에 보이는 것은 아래 네 가지뿐입니다.
+
+```mermaid
+flowchart LR
+  model[("tortoisebot.urdf.xacro<br/>laser.xacro")] -.->|"xacro 실행"| rsp("robot_state_publisher")
+  rsp -->|"base_footprint → base_link → laser_link"| tf["/tf, /tf_static"]
+  gz[("Gazebo<br/>gpu_lidar, DiffDrive")] --> br("parameter_bridge")
+  br --> scan["/scan"]
+  br --> odom["/odom"]
+  br -->|"odom → base_footprint"| tf
+  scan --> nav("Nav2<br/>bringup_launch.py")
+  odom --> nav
+  tf --> nav
+  nav -->|"Twist"| cmd["/cmd_vel"]
+  cmd --> br
+```
+
+그림에서 볼 것: 로봇이 바뀌어도 Nav2 쪽 연결(`/scan`, `/odom`, `/tf`, `/cmd_vel`)은 그대로이고, 로봇 쪽(모델, 센서, 브리지)이 이 이름들을 만들어 냅니다. `map → odom` 변환은 Nav2 안의 amcl이 더하므로 위 그림에는 없습니다(17-5).
+
+시작은 좌표 변환 트리를 눈으로 확인하는 것입니다.
+
+예: 17-1의 명령입니다. 센서를 붙이기 전에 트리가 `odom`부터 바퀴까지 이어져 있는지 봅니다.
+
+```bash
+ros2 run tf2_tools view_frames
+ros2 run tf2_ros tf2_echo odom base_footprint
+```
+
+센서를 붙일 때는 Gazebo 쪽 센서가 내는 토픽 이름과 header의 `frame_id`가 각각 브리지와 tf 트리에 맞아야 합니다.
+
+예: 17-2의 `laser.xacro`입니다. `frame_id`로 `laser_link`를 쓰도록 지정해야 tf 트리의 링크와 이름이 같아집니다.
+
+```xml
+<topic>scan</topic>
+<gz_frame_id>laser_link</gz_frame_id>
+```
+
+### 남의 로봇용 설정을 내 로봇에 맞추기
+
+Nav2의 기본 설정 파일에는 특정 로봇을 가정한 값(`robot_radius: 0.22`, `robot_base_frame: base_link` 등)이 들어 있습니다. 17-4에서는 파일을 복사한 뒤, 내 로봇과 다른 값만 고칩니다.
+
+```mermaid
+flowchart TB
+  params[("nav2_params.yaml<br/>기본 파일을 복사한 것")]
+  fix1["robot_base_frame<br/>base_link → base_footprint<br/>4곳"]
+  fix2["robot_radius<br/>0.22 → 0.20<br/>2곳"]
+  fix3["cmd_vel 타입<br/>Nav2 출력과 브리지 yaml이 같아야 함"]
+  keep1["amcl 좌표계 이름<br/>이미 같아서 그대로"]
+  keep2["scan 토픽 이름<br/>이미 같아서 그대로"]
+  params -.-> fix1
+  params -.-> fix2
+  params -.-> fix3
+  params -.-> keep1
+  params -.-> keep2
+```
+
+그림에서 볼 것: 고치는 곳은 프레임 이름, 로봇 크기, 속도 명령 타입 세 종류입니다. 토픽 이름과 amcl의 프레임 이름은 표준 이름을 지켰기 때문에 고칠 필요가 없었습니다.
+
+예: 17-4에서 실제로 바뀌는 줄입니다.
+
+```text
+-  robot_base_frame: base_link
++  robot_base_frame: base_footprint
+-  robot_radius: 0.22
++  robot_radius: 0.20
+```
+
+예: 17-6에서 Nav2 쪽 `cmd_vel` 타입을 확인하는 명령입니다. 기본값이 `False`(Twist)이고, 이 로봇의 브리지도 `Twist`라서 맞습니다.
+
+```bash
+ros2 param get /controller_server enable_stamped_cmd_vel
+```
+
+### 코드와 폴더 구조
+
+이 장은 새 패키지를 만들지 않고, 16장의 `tortoisebot` 패키지에 파일을 더합니다. 16장의 구조에 `laser.xacro`, `tortoise_sandbox.sdf`, `nav2_params.yaml`이 더해집니다.
+
+```text
+~/rosbook_ws/src/tortoisebot/
+├── urdf/
+│   ├── tortoisebot.urdf.xacro   # include 한 줄 추가: laser.xacro (17-2)
+│   └── laser.xacro              # 새 파일: laser_link, laser_joint, gpu_lidar 센서 (17-2)
+├── config/
+│   ├── tortoisebot_bridge.yaml  # scan 항목 추가 (17-2)
+│   └── nav2_params.yaml         # 새 파일: Nav2 기본 설정을 복사해 6줄 수정 (17-4)
+└── worlds/
+    └── tortoise_sandbox.sdf     # 새 파일: 연습장 월드(Sensors 시스템 포함) (17-3)
+```
+
+`setup.py`는 16장에서 `urdf/*.xacro`, `config/*.yaml`, `worlds/*.sdf`를 이미 `glob`으로 잡아 두었으므로 고치지 않고, 새 파일은 다시 빌드하면 `install/tortoisebot/share/tortoisebot/urdf/`, `.../config/`, `.../worlds/`에 놓입니다. `sim.launch.py`는 `world:=`로 월드 파일 경로를 받으므로 이것도 고치지 않습니다. 17-5에서 Nav2에 주는 `params_file`은 설치 폴더가 아니라 소스 폴더의 `nav2_params.yaml`을 가리킵니다.
+
+이 장에서 새로 짜는 노드 코드는 없습니다. Nav2 노드들은 이미 설치된 패키지(`nav2_bringup`)이고, 이 장은 그 노드들이 읽는 모델, 월드, 설정 파일만 더합니다.
+
+### 실무 메모
+
+- 표준 토픽 이름(`/scan`, `/odom`, `/cmd_vel`)과 표준 프레임 이름(`map`, `odom`, `base_footprint`, `base_link`, REP 105)을 지키면 Nav2 같은 큰 스택을 거의 고치지 않고 씁니다. 이 장에서 고친 것은 6줄뿐입니다.
+- 새 로봇에 Nav2를 붙일 때는 순서를 지킵니다. tf 트리(17-1), 센서 토픽과 `frame_id`(17-3), `/odom`, `/cmd_vel` 타입(17-6), 마지막으로 Nav2입니다. 앞 단계가 안 되면 뒤 단계로 넘어가지 말고 앞 단계부터 고칩니다. Nav2 로그부터 읽으면 원인을 놓치기 쉽습니다.
+- 기본 설정 파일은 복사해서 쓰고 `diff`로 바뀐 줄을 확인합니다. 원본이 업데이트되어도 어디를 고쳤는지 한눈에 보입니다.
+- 센서가 만드는 `frame_id`는 모델의 링크 이름과 문자열까지 같아야 합니다. `gz_frame_id`를 빠뜨리면 Gazebo가 정한 긴 이름이 들어가 tf 트리와 맞지 않습니다(17-2).
+- `/cmd_vel` 타입은 Nav2의 출력 노드들(controller_server, velocity_smoother, collision_monitor 등)과 로봇 브리지가 모두 같아야 합니다. 한 곳만 바꾸면 연결되지 않습니다(5절 Q6).
+- 시뮬에 붙는 모든 노드와 도구는 `use_sim_time:=true`로 실행합니다. 하나만 빠져도 변환 시각이 맞지 않습니다(4절).
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -460,3 +574,4 @@ amcl의 입자(particle)들이 틀린 곳에 퍼지고, 레이저 점이 지도 
   - `gz sdf -k`로 월드 파일을 단독 검사하면 `model://` 주소를 풀지 못해 오류가 납니다(검사 도구가 `GZ_SIM_RESOURCE_PATH`를 쓰지 않음). 월드는 위의 서버 실행으로만 확인했습니다.
   - 4절의 증상은 모두 예상이며 재현하지 않았습니다.
   - `empty.sdf`에 Sensors 시스템이 들어 있는지는 확인하지 않았습니다(17-2 해설에 "않을 수 있으므로"로 적음).
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
