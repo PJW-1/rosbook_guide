@@ -8,17 +8,42 @@
 토픽은 이름과 타입과 QoS로 정해지는 단방향 통로입니다. publisher는 받는 쪽이 누구인지 모르고, subscriber도 보내는 쪽이 누구인지 모릅니다.
 둘을 이어 주는 것은 이름이 같고, 타입이 같고, QoS가 서로 맞는다는 조건뿐입니다. 셋 중 하나라도 어긋나면 대부분 오류 없이 조용히 아무것도 전달되지 않습니다.
 
+```mermaid
+flowchart LR
+  tp("topic_publisher") -->|"std_msgs/msg/Int32<br/>RELIABLE, VOLATILE"| counter["/counter"]
+  counter --> ts("topic_subscriber")
+  mp("message_publisher") -->|"basics_interfaces/msg/Complex"| complex["/complex"]
+  complex --> ms("message_subscriber")
+  number["/number"] -->|"std_msgs/msg/Int32"| doubler("doubler")
+  doubler --> doubled["/doubled"]
 ```
-[topic_publisher] --(/counter, std_msgs/msg/Int32, RELIABLE+VOLATILE)--> [topic_subscriber]
-[message_publisher] --(/complex, basics_interfaces/msg/Complex)--> [message_subscriber]
-              (/number) --> [doubler] --> (/doubled)
-```
+
+그림에서 볼 것: 노드끼리는 직접 이어져 있지 않고 언제나 토픽을 사이에 둡니다. doubler는 받는 쪽이면서 보내는 쪽이고, 실습 3-7에서는 `/number`를 `/counter`로 리매핑해 첫 줄의 publisher에 연결합니다.
 
 ## 1. 목표와 개념
 
 원서 3장은 rospy로 토픽에 발행하고 구독하는 노드(원서 PDF p.52~58), 늦게 접속한 노드도 마지막 값을 받게 하는 latched 토픽(p.58~59), 기본 메시지 타입(p.59~61), 직접 정의한 메시지(p.61~67), 발행과 구독을 한 노드에서 함께 하는 예(p.67~68)를 다룹니다. 이 장은 같은 흐름을 rclpy로 다시 만듭니다. 여기서 만드는 `topic_publisher`(토픽 `counter`, 타입 `std_msgs/msg/Int32`)는 20장과 23장에서 다시 씁니다.
 
 **publisher와 subscriber.** rclpy(ROS 2의 Python 클라이언트 라이브러리)에서 노드는 `Node` 클래스를 상속해서 만듭니다. `create_publisher(타입, 토픽 이름, QoS)`로 publisher를, `create_subscription(타입, 토픽 이름, 콜백, QoS)`로 subscriber를 만듭니다. 주기적인 일은 `create_timer(주기, 콜백)`로 맡깁니다. `rclpy.spin(node)`은 메시지 도착과 타이머 만료를 기다렸다가 해당 콜백을 불러 주는 반복문입니다.
+
+예:
+
+```python
+self.pub = self.create_publisher(Int32, 'counter', 10)
+self.sub = self.create_subscription(Int32, 'counter', self.callback, 10)
+```
+
+두 줄에 같은 타입 `Int32`, 같은 이름 `'counter'`, 같은 QoS `10`이 들어 있습니다(실습 3-1, 3-2). 이 세 값이 맞는다는 것만으로 두 노드가 이어지고, 서로의 노드 이름은 어디에도 나오지 않습니다.
+
+```mermaid
+flowchart LR
+  tp("topic_publisher<br/>Int32, RELIABLE 제공") --> counter["/counter"]
+  counter --> ts("topic_subscriber<br/>Int32, RELIABLE 요구")
+  counter --> echo("BEST_EFFORT로 구독한<br/>ros2 topic echo")
+  countr["/countr"] --> typo("countr로 리매핑한<br/>topic_subscriber")
+```
+
+그림에서 볼 것: `/counter`를 받는 두 subscriber는 모두 메시지를 받습니다. RELIABLE을 제공하는 publisher는 BEST_EFFORT를 요구하는 쪽도 채워 주기 때문입니다. 이름이 한 글자 다른 `/countr`는 처음부터 다른 토픽이라서 publisher가 하나도 없고, 오류도 나지 않습니다(4절).
 
 **QoS (Quality of Service).** 토픽 연결의 전달 방식을 정하는 설정 묶음입니다. 이 장에서는 셋을 봅니다.
 - history와 depth: 보내지 못했거나 아직 처리하지 못한 메시지를 몇 개까지 쌓아 둘지. 숫자 `10`만 넘기면 `KEEP_LAST`, depth 10이라는 뜻입니다. 원서의 `queue_size`에 해당합니다.
@@ -29,7 +54,102 @@ publisher는 "이만큼 해 줄 수 있다"를 내놓고 subscriber는 "이만�
 
 비유: 택배 회사(publisher)가 "배송 추적 가능"을 내걸면 추적을 원하는 손님과 원하지 않는 손님 모두 받을 수 있지만, "추적 불가" 회사는 추적을 꼭 원하는 손님과 계약할 수 없습니다.
 
+예:
+
+```python
+qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+self.pub = self.create_publisher(Int32, 'latched', qos)
+```
+
+숫자 `10` 대신 `QoSProfile`을 넘기면 원하는 항목만 바꿀 수 있습니다(실습 3-3). 여기서는 durability만 바꿨으므로 reliability는 기본값 RELIABLE입니다.
+
+```mermaid
+flowchart LR
+  p_rel("publisher<br/>RELIABLE 제공") -->|"받음"| s_be("subscriber<br/>BEST_EFFORT 요구")
+  p_be("publisher<br/>BEST_EFFORT 제공") -.->|"RELIABILITY 경고, 전달 없음"| s_rel("subscriber<br/>RELIABLE 요구")
+  p_tl("publisher<br/>TRANSIENT_LOCAL 제공") -->|"받음, 접속 뒤의 메시지만"| s_vo("subscriber<br/>VOLATILE 요구")
+  p_vo("publisher<br/>VOLATILE 제공") -.->|"DURABILITY 경고, 전달 없음"| s_tl("subscriber<br/>TRANSIENT_LOCAL 요구")
+```
+
+그림에서 볼 것: 토픽 상자는 생략하고 QoS만 보였습니다. 실선은 메시지가 실제로 오가는 연결이고, 점선은 서로 발견은 했지만 QoS가 맞지 않아 메시지가 오가지 않는 관계입니다. 점선은 모두 subscriber가 publisher보다 많이 요구한 경우입니다. 여덟 가지 조합 전체는 실습 3-4의 표에 있습니다.
+
 **메시지 정의.** 메시지 타입은 `.msg` 파일에 "타입 이름" 줄을 나열해서 정의합니다. 빌드할 때 rosidl이 이 파일로부터 Python 클래스와 C++ 구조체를 만들어 줍니다. ROS 2에서는 메시지를 정의하는 패키지를 `ament_cmake` 형식으로 따로 만드는 것이 관례입니다. 그래서 이 장에서 `basics_interfaces` 패키지를 새로 만듭니다.
+
+```mermaid
+flowchart LR
+  msg[("msg/Complex.msg")] --> gen[("rosidl_generate_interfaces<br/>CMakeLists.txt")]
+  gen --> py[("Python 클래스<br/>basics_interfaces.msg.Complex")]
+  gen --> cpp[("C++ 헤더<br/>basics_interfaces/msg/complex.hpp")]
+  py --> mp("message_publisher")
+  py --> ms("message_subscriber")
+  cpp --> cppnode("C++ 노드, 23장")
+```
+
+그림에서 볼 것: `.msg` 파일 하나에서 언어별 코드가 함께 만들어지고, 노드는 생성된 코드만 가져다 씁니다. 그래서 Python 노드와 C++ 노드가 같은 타입으로 통신할 수 있습니다. 23장의 C++ 노드는 같은 방식으로 생성된 `WordCount` 서비스 헤더를 씁니다.
+
+예:
+
+```cmake
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/Complex.msg"
+)
+```
+
+```python
+from basics_interfaces.msg import Complex
+```
+
+위는 `basics_interfaces/CMakeLists.txt`에서 코드 생성을 지시하는 부분이고(실습 3-5), 아래는 `basics` 패키지의 노드가 생성된 클래스를 가져오는 줄입니다(실습 3-6). import 경로가 `패키지 이름.msg`인 것을 봅니다.
+
+### 코드와 폴더 구조
+
+3장에서 워크스페이스에 `basics_interfaces` 패키지가 새로 생기고, `basics` 패키지에는 노드 파일이 더해집니다.
+
+```text
+~/rosbook_ws/src/
+├── basics_interfaces/       ament_cmake, 메시지 정의만 담는 패키지 (3-5)
+│   ├── CMakeLists.txt       rosidl_generate_interfaces로 코드 생성을 지시합니다
+│   ├── package.xml          rosidl 생성기, 런타임 의존성과 member_of_group
+│   ├── msg/Complex.msg      메시지 정의 (float32 real, float32 imaginary)
+│   ├── include/basics_interfaces/   생성기가 만든 빈 폴더, 쓰지 않습니다
+│   ├── src/                 생성기가 만든 빈 폴더, 쓰지 않습니다
+│   └── LICENSE
+└── basics/                  ament_python, 2장의 구조에 노드 파일이 더해집니다
+    ├── basics/
+    │   ├── topic_publisher.py      /counter 발행 (3-1)
+    │   ├── topic_subscriber.py     /counter 구독 (3-2)
+    │   ├── latched_publisher.py    /latched, TRANSIENT_LOCAL (3-3)
+    │   ├── message_publisher.py    /complex 발행 (3-6)
+    │   ├── message_subscriber.py   /complex 구독 (3-6)
+    │   └── doubler.py              /number 구독, /doubled 발행 (3-7)
+    ├── setup.py             console_scripts에 실행 파일 6개 등록
+    └── package.xml          rclpy, std_msgs, basics_interfaces 의존성 추가
+```
+
+메시지를 별도 패키지로 두는 이유는 두 가지입니다. `ament_python` 패키지에서는 `rosidl_generate_interfaces`를 쓸 수 없고, 메시지만 따로 있어야 다른 패키지(23장의 C++ 패키지 등)가 노드 코드 없이 메시지만 의존할 수 있습니다. `basics`의 `package.xml`에 `<depend>basics_interfaces</depend>`를 적으면 colcon이 `basics_interfaces`를 먼저 빌드합니다.
+
+빌드 뒤에 새로 생기는 주요 위치는 다음과 같습니다.
+
+```text
+~/rosbook_ws/install/
+├── basics/lib/basics/topic_publisher       entry_points로 만들어진 실행 파일 (ros2 run이 찾는 곳)
+└── basics_interfaces/
+    ├── lib/python3.12/site-packages/basics_interfaces/msg/_complex.py   생성된 Python 코드
+    ├── include/basics_interfaces/basics_interfaces/msg/complex.hpp      생성된 C++ 헤더
+    └── share/basics_interfaces/msg/Complex.msg                          설치된 메시지 정의 파일
+```
+
+생성된 Python 코드의 위치는 실습 3-5에서 확인합니다. C++ 헤더와 `share/`의 정의 파일은 `/opt/ros/jazzy/include/std_msgs/std_msgs/msg/int32.hpp`, `/opt/ros/jazzy/share/std_msgs/msg/Int32.msg`와 같은 배치를 따릅니다.
+
+노드 코드의 뼈대는 2장에서 본 CONVENTIONS.md 6절 그대로이고, 이 장에서는 `__init__` 안에 publisher, subscription, timer가 처음 들어갑니다. 콜백은 `spin`이 부르는 메서드(`timer_callback`, `callback`)로 둡니다.
+
+### 실무 메모
+
+- 메시지, 서비스, 액션 정의는 노드 패키지와 나눠 `<프로젝트>_interfaces` 또는 `<프로젝트>_msgs`라는 이름의 패키지에 둡니다. `/opt/ros/jazzy/share`에도 `example_interfaces`, `rcl_interfaces`, `std_msgs`, `geometry_msgs`처럼 이 관례를 따른 패키지가 있습니다.
+- 새 메시지를 만들기 전에 `geometry_msgs`, `sensor_msgs`, `nav_msgs`에 같은 의미의 타입이 있는지 먼저 찾습니다. 표준 타입을 쓰면 rviz2, `ros2 bag` 같은 도구가 바로 이해합니다.
+- 센서 데이터를 받는 노드는 rclpy의 `from rclpy.qos import qos_profile_sensor_data`를 QoS로 씁니다. BEST_EFFORT, KEEP_LAST depth 5, VOLATILE이라서 BEST_EFFORT로 발행하는 드라이버와도, RELIABLE로 발행하는 드라이버와도 연결됩니다.
+- 메시지에 담는 값의 단위는 REP 103을 따라 SI 단위(미터, 초, 라디안)로 씁니다. 필드 이름에 단위를 붙이지 않아도 모두가 같은 단위로 읽게 하려는 약속입니다.
+- 데이터가 오지 않으면 코드보다 먼저 `ros2 topic info -v <토픽>`으로 양쪽의 이름, 타입, QoS를 비교합니다. 이 장에서 본 실패는 대부분 오류 없이 조용히 일어납니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -877,3 +997,4 @@ subscriber도 BEST_EFFORT로 요청해야 합니다. RELIABLE로 요청하면 pu
   - Q1의 타이머 객체를 붙잡지 않았을 때의 동작.
   - publisher를 다시 켰을 때 0부터 다시 받는 것은 코드에 근거한 설명이며 따로 실행해 보지 않았습니다.
   - 학습자의 `~/rosbook_ws`에서 장 순서대로 한 단계씩 빌드하는 과정 (검증은 최종 형태의 패키지로 했습니다). 기본 도메인 0에서의 실행.
+- 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
