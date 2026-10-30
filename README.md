@@ -64,31 +64,48 @@ ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
 
 ## 목차
 
-| 장 | 제목 | 문서 | 원서 PDF 쪽 | 상태 |
+| 장 | 제목 | 문서 | 원서 PDF 쪽 | 검증 상태 |
 |---|---|---|---|---|
-| 1 | 소개 | [ch01_introduction.md](ch01_introduction.md) | 23~28 | 준비됨 |
-| 2 | 기본 도구와 개념 | [ch02_preliminaries.md](ch02_preliminaries.md) | 29~50 | 준비됨 |
-| 3 | 토픽 | [ch03_topics.md](ch03_topics.md) | 51~70 | 준비됨 |
-| 4 | 서비스 | [ch04_services.md](ch04_services.md) | 71~80 | 준비됨 |
-| 5 | 액션 | [ch05_actions.md](ch05_actions.md) | 81~96 | 준비됨 |
-| 6 | 로봇과 시뮬레이터 | [ch06_robots_and_simulators.md](ch06_robots_and_simulators.md) | 97~118 | 준비됨 |
-| 7 | Wander-bot | [ch07_wander_bot.md](ch07_wander_bot.md) | 119~128 | 준비됨 |
-| 8 | Teleop-bot | [ch08_teleop_bot.md](ch08_teleop_bot.md) | 131~154 | 준비됨 |
-| 9 | 지도 만들기 | [ch09_building_maps.md](ch09_building_maps.md) | 155~170 | 준비됨 |
-| 10 | 지도 위에서 스스로 움직이기 | [ch10_navigation.md](ch10_navigation.md) | 171~184 | 준비됨 |
-| 11 | 체스 두는 로봇팔 (Chess-bot) | [ch11_chess_bot.md](ch11_chess_bot.md) | 185~209 | 준비됨 |
-| 12 | 카메라로 선 따라가기 | [ch12_follow_bot.md](ch12_follow_bot.md) | 213~228 | 준비됨 |
-| 13 | 순찰하기 | [ch13_on_patrol.md](ch13_on_patrol.md) | 229~244 | 준비됨 |
-| 14 | 창고에서 물건 가져오기 | [ch14_stockroom_bot.md](ch14_stockroom_bot.md) | 245~276 | 준비됨 |
-| 15 | 나만의 센서와 액추에이터 | [ch15_sensors_and_actuators.md](ch15_sensors_and_actuators.md) | 279~294 | 준비됨 |
-| 16 | 나만의 이동 로봇 1부 | [ch16_mobile_robot_part1.md](ch16_mobile_robot_part1.md) | 295~318 | 준비됨 |
-| 17 | 나만의 이동 로봇 2부 | [ch17_mobile_robot_part2.md](ch17_mobile_robot_part2.md) | 319~338 | 준비됨 |
-| 18 | 나만의 로봇팔 | [ch18_robot_arm.md](ch18_robot_arm.md) | 339~366 | 준비됨 |
-| 19 | 소프트웨어 라이브러리 붙이기 | [ch19_software_library.md](ch19_software_library.md) | 367~376 | 준비됨 |
-| 20 | 도구 | [ch20_tools.md](ch20_tools.md) | 379~394 | 준비됨 |
-| 21 | 로봇 동작 디버깅 | [ch21_debugging.md](ch21_debugging.md) | 395~418 | 준비됨 |
-| 22 | ROS 커뮤니티 | [ch22_community.md](ch22_community.md) | 419~424 | 준비됨 |
-| 23 | ROS 2에서 C++ 쓰기 | [ch23_cpp.md](ch23_cpp.md) | 425~435 | 준비됨 |
+| 1 | 소개 | [ch01_introduction.md](ch01_introduction.md) | 23~28 | 검증됨 (0/3) |
+| 2 | 기본 도구와 개념 | [ch02_preliminaries.md](ch02_preliminaries.md) | 29~50 | 일부 미검증 (4/10) |
+| 3 | 토픽 | [ch03_topics.md](ch03_topics.md) | 51~70 | 검증됨 (0/7) |
+| 4 | 서비스 | [ch04_services.md](ch04_services.md) | 71~80 | 검증됨 (0/5) |
+| 5 | 액션 | [ch05_actions.md](ch05_actions.md) | 81~96 | 일부 미검증 (1/5) |
+| 6 | 로봇과 시뮬레이터 | [ch06_robots_and_simulators.md](ch06_robots_and_simulators.md) | 97~118 | 대부분 미검증 (5/7) |
+| 7 | Wander-bot | [ch07_wander_bot.md](ch07_wander_bot.md) | 119~128 | 대부분 미검증 (3/5) |
+| 8 | Teleop-bot | [ch08_teleop_bot.md](ch08_teleop_bot.md) | 131~154 | 일부 미검증 (3/8) |
+| 9 | 지도 만들기 | [ch09_building_maps.md](ch09_building_maps.md) | 155~170 | 일부 미검증 (3/6) |
+| 10 | 지도 위에서 스스로 움직이기 | [ch10_navigation.md](ch10_navigation.md) | 171~184 | 대부분 미검증 (5/6) |
+| 11 | 체스 두는 로봇팔 (Chess-bot) | [ch11_chess_bot.md](ch11_chess_bot.md) | 185~209 | 대부분 미검증 (10/10) |
+| 12 | 카메라로 선 따라가기 | [ch12_follow_bot.md](ch12_follow_bot.md) | 213~228 | 대부분 미검증 (5/6) |
+| 13 | 순찰하기 | [ch13_on_patrol.md](ch13_on_patrol.md) | 229~244 | 대부분 미검증 (5/8) |
+| 14 | 창고에서 물건 가져오기 | [ch14_stockroom_bot.md](ch14_stockroom_bot.md) | 245~276 | 대부분 미검증 (4/7) |
+| 15 | 나만의 센서와 액추에이터 | [ch15_sensors_and_actuators.md](ch15_sensors_and_actuators.md) | 279~294 | 일부 미검증 (1/8) |
+| 16 | 나만의 이동 로봇 1부 | [ch16_mobile_robot_part1.md](ch16_mobile_robot_part1.md) | 295~318 | 일부 미검증 (3/7) |
+| 17 | 나만의 이동 로봇 2부 | [ch17_mobile_robot_part2.md](ch17_mobile_robot_part2.md) | 319~338 | 일부 미검증 (2/6) |
+| 18 | 나만의 로봇팔 | [ch18_robot_arm.md](ch18_robot_arm.md) | 339~366 | 대부분 미검증 (6/7) |
+| 19 | 소프트웨어 라이브러리 붙이기 | [ch19_software_library.md](ch19_software_library.md) | 367~376 | 일부 미검증 (2/6) |
+| 20 | 도구 | [ch20_tools.md](ch20_tools.md) | 379~394 | 일부 미검증 (1/8) |
+| 21 | 로봇 동작 디버깅 | [ch21_debugging.md](ch21_debugging.md) | 395~418 | 일부 미검증 (5/8) |
+| 22 | ROS 커뮤니티 | [ch22_community.md](ch22_community.md) | 419~424 | 검증됨 (0/4) |
+| 23 | ROS 2에서 C++ 쓰기 | [ch23_cpp.md](ch23_cpp.md) | 425~435 | 검증됨 (0/5) |
+| 부록 | 이 가이드의 실습 환경(WSL2) 메모 | [appendix_wsl_environment.md](appendix_wsl_environment.md) | 해당 없음 | 해당 없음 |
+
+"검증 상태"는 문서를 쓸 때 실습을 실제로 실행해 확인한 정도입니다. 괄호 안의 숫자는 "미검증 실습 표시가 붙은 실습 수/전체 실습 수"입니다.
+
+- 검증됨: 모든 실습을 실행해 관찰 항목을 확인했습니다. "일부러 망가뜨려 보기"의 몇몇 행에는 `(미검증)`이 붙어 있을 수 있습니다.
+- 일부 미검증: 일부 실습이나 실습의 일부(주로 GUI 화면)를 확인하지 못했습니다.
+- 대부분 미검증: 시뮬레이션이나 GUI가 필요한 핵심 실습의 절반 넘게 확인하지 못했습니다. 관찰 항목의 상당수는 설치된 파일과 소스 코드를 읽고 쓴 예상이므로, 실제 결과와 다르면 문서가 틀렸을 수 있습니다.
+
+확인하지 못한 실습에는 제목 바로 아래에 "미검증 실습" 표시가 있고, 그 표시에 확인하지 못한 범위가 적혀 있습니다. 무엇을 어떻게 확인했는지는 각 장 7절 "이 문서의 검증 상태"에 접혀 있습니다. 판단 기준은 [CONVENTIONS.md](CONVENTIONS.md)의 9절에 있습니다.
+
+### 기본기부터 다지는 순서
+
+ROS 2의 기본 구조를 먼저 탄탄히 익히고 싶다면 1~5장 → 20장 → 21장 → 23장 순서로 공부합니다. 이 장들은 시뮬레이터 없이 터미널만으로 실습할 수 있고(21장의 실습 21-6만 시뮬레이터를 씁니다), 대부분의 실습을 실행해 확인했습니다. 이 순서를 마친 뒤 6장부터 시뮬레이션 장으로 넘어가면 로봇 동작이 기대와 다를 때 원인을 스스로 좁혀 갈 수 있습니다.
+
+## 검증 스크립트 (`checks/`)
+
+문서를 고치게 만든 동작이나 오해하기 쉬운 동작은 `checks/` 폴더의 스크립트로 다시 확인할 수 있습니다. 스크립트는 임시 폴더와 전용 `ROS_DOMAIN_ID`를 쓰므로 `~/rosbook_ws`와 실행 중인 노드를 건드리지 않습니다. 실행 방법과 각 스크립트가 확인하는 내용은 [checks/README.md](checks/README.md)에 있습니다. 실습을 대신하는 도구가 아니므로, 실습은 지금처럼 직접 입력하고 문서와 결과가 다를 때 참고용으로 씁니다.
 
 ## ROS 1 (원서) → ROS 2 Jazzy 공통 대응표
 
