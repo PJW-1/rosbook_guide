@@ -984,6 +984,8 @@ subscriber도 BEST_EFFORT로 요청해야 합니다. RELIABLE로 요청하면 pu
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (2026-10-27, WSL2 Ubuntu 24.04, ROS 2 Jazzy, `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`, 검증용 `ROS_DOMAIN_ID=21`, `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`, 별도 검증 워크스페이스에 이 문서의 파일 그대로 작성):
   - `basics_interfaces`와 `basics` 빌드, `colcon test --packages-select basics` (3 tests, 0 errors, 0 failures, 1 skipped; flake8, pep257 통과).
   - `topic_publisher`: `topic list -t`, `topic echo --once`(`data: 9`), `topic hz`(average rate 2.000), `topic info -v`(RELIABLE, KEEP_LAST (10), VOLATILE), `topic find`.
@@ -1003,3 +1005,5 @@ subscriber도 BEST_EFFORT로 요청해야 합니다. RELIABLE로 요청하면 pu
   - 2절 표와 실습 3-1 해설, Q1: rclpy에서는 반환값을 저장하지 않아도 타이머와 구독이 유지됩니다. `checks/rclpy_unstored_refs.sh`에서 반환값을 저장하지 않은 0.1초 주기 타이머와 구독을 `gc.collect()`를 계속 부르며 2초 동안 돌리자 타이머는 20번 불렸고 구독은 19~20개를 받았으며(두 번 실행), 노드의 내부 목록에 `timers=1 subscriptions=1`이 남아 있었습니다. 근거 코드는 rclpy `node.py`의 `create_subscription`, `create_timer`가 `self._subscriptions`, `self._timers`에 객체를 추가하는 부분입니다. rclcpp와의 차이는 `checks/rclcpp_local_timer.sh`로 확인했습니다(23장).
   - 실습 3-7의 관찰: `ros2 topic pub -t 3`은 구독자가 연결될 때까지 기다렸다가 발행합니다. `checks/topic_pub_waits.sh`에서 구독자가 없으면 `Waiting for at least 1 matching subscription(s)...`만 출력한 채 5초 안에 끝나지 않았고, echo 구독자가 있으면 3번의 시도 모두 세 메시지가 도착했습니다. 근거 코드는 `ros2topic/verb/pub.py`에서 `-t`나 `--once`를 주면 `--wait-matching-subscriptions`의 기본값이 1이 되는 부분입니다.
 - 미검증 표시(2026-10-31): 4절의 publisher 종료 행 가운데 다시 띄우면 0부터 받는다는 부분과 `<member_of_group>` 삭제 행에 (미검증)을 붙였습니다.
+
+</details>

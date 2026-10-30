@@ -674,6 +674,8 @@ ros2 action send_goal /speak basics_interfaces/action/Talk "{sentence: 'a very l
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (2026-10-27, 검증용 별도 워크스페이스, `ROS_DOMAIN_ID` 분리, Fast DDS와 Cyclone DDS 각각에서 실행. 마지막 재검증은 `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`):
   - `basics_interfaces` 에 `action/Talk.action` 을 추가해 빌드되는 것(이 검증 워크스페이스의 `basics_interfaces` 에는 `WordCount.srv` 와 `Talk.action` 만 넣었고, 5장의 파일과 함께 빌드한 것은 확인하지 않음). `ros2 interface show` 출력.
   - 이 문서에 실린 코드 그대로의 `talk_bot` 빌드와 `colcon test`(3개 중 통과 2, 건너뜀 1), `ros2 action list -t`, `ros2 action info /speak -t`, `ros2 node info /speaker` 의 출력 모양.
@@ -691,3 +693,5 @@ ros2 action send_goal /speak basics_interfaces/action/Talk "{sentence: 'a very l
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 수정(2026-10-30): 실습 19-2의 CMake 블록에 5장에서 넣은 `DEPENDENCIES builtin_interfaces` 줄이 빠져 있어서 다시 넣었습니다. 블록을 그대로 덮어쓰면 5장에서 배운 의존 선언이 사라지기 때문입니다. `Complex.msg`, `WordCount.srv`, `Timer.action`, `Talk.action` 네 파일을 함께 빌드하는 경우를 이 줄이 있을 때와 없을 때 모두 시험했습니다. 둘 다 빌드되었고, Python에서 네 타입을 모두 import할 수 있었습니다. 위 "확인 못 함"의 마지막 항목은 이 시험으로 확인했습니다.
 - 결함 수정(2026-10-31): 실습 19-6이 `wav_dir`를 준 서버로 끼어들기와 취소까지 시험하던 순서를 고쳤습니다. 검증에 쓴 가짜 espeak-ng는 문장 길이에 비례해 기다렸지만, 실제 espeak-ng는 `-w`로 파일에 저장할 때 소리를 내지 않으므로 말하는 시간만큼 걸리지 않을 수 있습니다. 그러면 첫 문장이 두 번째 문장보다 먼저 끝나 끼어들기를 볼 수 없습니다. 그래서 파라미터와 wav 파일 확인은 `wav_dir`를 준 서버로, 끼어들기와 취소는 `wav_dir` 없이 다시 띄운 서버로 나눴습니다. "끊긴 문장의 wav 파일은 만들어지지 않는다"는 관찰은 지웠습니다. 가짜 스크립트에서만 확인한 내용이고, 실제 espeak-ng가 중간에 끊겼을 때 파일을 어떻게 남기는지는 확인하지 않았기 때문입니다. 실제 espeak-ng 없이 확인할 수 없는 실습 19-1과 19-6에 미검증 실습 표시를 붙였습니다.
+
+</details>

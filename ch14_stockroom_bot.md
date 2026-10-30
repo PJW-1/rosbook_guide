@@ -1040,6 +1040,8 @@ ros2 topic info -v /cmd_vel
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (별도 작업 공간 `~/guide_verify/F/ws`, Cyclone DDS, `ros2 daemon start` 이후):
   - `apt-cache policy`: `ros-jazzy-fetch-gazebo`, `ros-jazzy-fetch-description`, `ros-jazzy-turtlebot3-manipulation-gazebo` 후보 없음, `ros-jazzy-turtlebot3-manipulation` 2.2.1, `ros-jazzy-aruco-opencv` 6.1.2, `ros-jazzy-apriltag-ros` 3.4.0, `ros-jazzy-control-msgs`·`ros-jazzy-cv-bridge`·`ros-jazzy-slam-toolbox` 설치됨.
   - `ros2 interface show control_msgs/action/GripperCommand`.
@@ -1054,3 +1056,5 @@ ros2 topic info -v /cmd_vel
   - 합성 이미지 시험 중 한 번, `marker/error`가 몇 개 나온 뒤 끊겨 정렬이 실패한 적이 있습니다. 같은 조건으로 다시 실행했을 때는 재현되지 않았고 원인은 확인하지 못했습니다.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 결함 수정(2026-10-31): Q3의 답에서 "물건 상자에 `collision`이 없어 LiDAR 광선이 통과한다"는 이유를 지우고, 높이만으로 설명하도록 고쳤습니다. 근거는 `turtlebot3_gazebo/models/turtlebot3_waffle_pi/model.sdf`의 LiDAR가 `type="gpu_lidar"`이고, `gz/sensors/GpuLidarSensor.hh`의 설명이 visual 형상까지의 거리를 잰다고 적은 점입니다. LiDAR 높이 0.17 m는 0.13 m(TF 0.132 m)로 고쳐 6장과 맞췄습니다. 근거는 `turtlebot3_description/urdf/turtlebot3_waffle_pi.urdf`의 `base_joint` 0.010과 `scan_joint` 0.122, `model.sdf`의 센서 `pose` 0.121(모델 원점 기준)입니다. 실습 14-2 월드 해설 표의 같은 숫자와 `item` 설명도 함께 고쳤습니다. 시뮬은 실행하지 않았으므로 collision 없는 상자가 LiDAR 높이에서 스캔에 잡히는지는 직접 보지 못했습니다. 7절에서 실행하지 않았다고 적은 실습 14-2(Gazebo 화면), 14-3, 14-4(시뮬 카메라), 14-7과 4절의 해당 네 행에 미검증 표시를 달았습니다. 14-2 표의 카메라 높이 0.09 m도 같은 URDF의 `base_joint` 0.010, `camera_joint` 0.084, `camera_rgb_joint` 0.009를 더한 약 0.10 m로 고쳤습니다.
+
+</details>

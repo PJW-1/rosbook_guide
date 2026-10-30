@@ -832,6 +832,8 @@ smach는 상태의 결과가 전이 표에 없으면 상태 기계 결과 목록
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (별도 작업 공간 `~/guide_verify/F/ws`, Cyclone DDS, `ros2 daemon start` 이후):
   - `patrol` 패키지 빌드와 `colcon test`(flake8, pep257, copyright) 통과.
   - `fake_nav`와 `patrol`의 실제 프로세스 간 실행: `ros2 action list -t`, `ros2 action info`(서버 `/fake_nav` 1개), `ros2 action send_goal`, 세 지점 순환과 `arrived` 로그, `succeed false`로 바꾼 뒤 `failed` 로그.
@@ -843,3 +845,5 @@ smach는 상태의 결과가 전이 표에 없으면 상태 기계 결과 목록
   - 4절의 액션 이름 오타, 타입 불일치, 노드 종료, `/map` QoS, `use_sim_time` 누락 증상은 실행하지 않은 예상입니다. `TURTLEBOT3_MODEL` 누락의 `KeyError`는 launch 파일 코드를 읽어 판단했습니다.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 미검증 표시(2026-10-31): 실습 13-1, 13-2, 13-5, 13-6, 13-7에 미검증 실습 표시를 붙였고, 4절의 모든 행(6개)에 (미검증)을 붙였습니다.
+
+</details>

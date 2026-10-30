@@ -718,6 +718,8 @@ bag은 메시지마다 recorder가 받은 시각을 저장하고, `ros2 bag play
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (설치된 Jazzy에서 직접 실행 또는 파일 확인):
   - 패키지 설치와 버전: `apt-cache policy`로 ros-jazzy-slam-toolbox 2.8.5, ros-jazzy-nav2-map-server 1.3.13, ros-jazzy-turtlebot3-navigation2 2.3.6, ros-jazzy-turtlebot3-cartographer 2.3.6, ros-jazzy-teleop-twist-keyboard 2.4.1, ros-jazzy-rosbag2-storage-mcap 0.26.11.
   - `ros2 interface show`로 `nav_msgs/msg/OccupancyGrid`, `nav_msgs/msg/MapMetaData` 필드와 data 배열 순서 주석.
@@ -735,3 +737,5 @@ bag은 메시지마다 recorder가 받은 시각을 저장하고, `ros2 bag play
   - 4절 표 중 `/tf_static` 누락, Gazebo와 bag `/clock` 동시 발행, `negate: 1`, 잘못된 `yaml_filename`, slam_toolbox 종료 실험의 실제 출력.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 결함 수정(2026-10-31): 실습 9-4가 slam_toolbox를 켠 채로 bag을 기록해 `/tf`에 `map → odom`이 들어가고, 9-5에서 bag player와 새 slam_toolbox가 둘 다 `map → odom`을 내게 되는 설계를 고쳤습니다. 9-4를 "SLAM 없이 bag 기록"과 "slam_toolbox로 지도 만들기" 두 단계로 나누고, 9-5의 관찰에 `/tf` publisher 확인을, 4절에 SLAM을 켠 채 기록한 bag을 쓰는 행을 더했습니다. `ros2 bag play`가 토픽 단위로만 거를 수 있다는 근거는 `ros2bag/verb/play.py`의 `--topics`, `--exclude-topics`, `--exclude-regex` 옵션입니다. 9-5의 재생 순서, `--clock`, `use_sim_time:=true`는 바뀌지 않습니다. 또 지도 저장 뒤의 설명에서 `map` 원점을 "SLAM을 시작한 순간의 로봇 위치"라고 쓴 부분을 "`odom` 원점과 같은 곳"으로 고치고, YAML의 `origin`(지도 이미지 왼쪽 아래 모서리)과 구분했습니다. 근거는 `slam_toolbox/config/mapper_params_online_async.yaml`과 `mapper_params_online_sync.yaml`에서 `map_start_pose`, `map_start_at_dock`이 주석 처리된 점, 그리고 첫 스캔의 보정 위치를 오도메트리 위치로 두는 slam_toolbox(Karto)의 동작입니다. 이 동작은 설치된 파일에 소스가 없어 직접 확인하지 못했습니다. 6장의 `odom` 원점 설명(생성 위치 (-2.0, -0.5))과 맞췄습니다. 시뮬은 실행하지 않았으므로 바뀐 9-4, 9-5 흐름도 실행해 보지 못했습니다. 실습 9-4, 9-5, 9-6(지도 보기 부분)과 4절에서 실행하지 않은 여섯 행에 미검증 표시를 달았습니다.
+
+</details>

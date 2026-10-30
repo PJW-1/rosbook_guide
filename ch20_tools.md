@@ -794,6 +794,8 @@ ros2 service list -t
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (2026-10-27, 검증용 별도 워크스페이스, `ROS_DOMAIN_ID` 분리, `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`, daemon 미리 실행 또는 `--no-daemon --spin-time 3`):
   - `ros2 daemon start` 출력, `--no-daemon --spin-time` 으로 노드 찾기.
   - 실습 20-2의 모든 명령과 출력: set/get/describe/list/delete/dump 내용, load 때 읽기 전용 파라미터 실패 메시지, `--params-file` 로 재시작 후 값.
@@ -813,3 +815,5 @@ ros2 service list -t
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 결함 수정(2026-10-31): 4절의 `data_files` 행을 고쳤습니다. 처음 행은 launch 줄을 빼고 다시 빌드하면 바로 오류가 난다고 적었지만, `--symlink-install` 로 이미 빌드한 워크스페이스에서는 전에 만든 링크가 `install/` 에 남아 launch가 그대로 실행됩니다. `checks/stale_launch_install.sh` 에서 `talker_listener.launch.py` 하나만 든 검증용 `basics` 패키지로 확인했습니다. 줄을 지우고 같은 워크스페이스에서 다시 빌드하면 `install/basics/share/basics/launch/` 에 `build/` 쪽을 가리키는 링크가 남아 launch가 성공했고, `build/basics` 와 `install/basics` 를 지운 뒤 다시 빌드하면 `file 'talker_listener.launch.py' was not found in the share directory of package 'basics' which is at '.../install/basics/share/basics'` 로 실패했습니다. 이 장의 `counter.launch.py` 로 직접 실행한 것은 아니므로, 행의 오류 문구는 파일 이름만 바꿔 적었습니다.
 - 미검증 표시(2026-10-31): 실습 20-3에 `colcon_cd` 부분을 확인하지 못했다는 미검증 실습 표시를 붙였고, 4절의 테스트 토픽 오타 행에 (미검증)을 붙였습니다.
+
+</details>

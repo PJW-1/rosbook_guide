@@ -883,6 +883,8 @@ ros2 param set /follower_p speed 0.0
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함:
   - 카메라 설정: 설치된 `turtlebot3_waffle_pi/model.sdf`(토픽, 해상도, 형식, 시야각, 프레임, 위치), `turtlebot3_waffle_pi_bridge.yaml`(camera_info), `spawn_turtlebot3.launch.py`(image_bridge, burger 제외)를 직접 읽음.
   - 별도 작업 공간(`~/guide_verify/F/ws`)에서 `follow_bot` 빌드 성공, `colcon test`의 flake8·pep257·copyright 통과(12~14장 세 패키지 합계 9 tests, 0 failures).
@@ -897,3 +899,5 @@ ros2 param set /follower_p speed 0.0
   - `ros2 launch ... --show-args` 출력 전체.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 미검증 표시(2026-10-31): 실습 12-1, 12-2, 12-4, 12-5, 12-6에 미검증 실습 표시를 붙였고, 4절의 노드 종료 행에 (미검증)을 붙였습니다.
+
+</details>

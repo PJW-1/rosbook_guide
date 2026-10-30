@@ -789,6 +789,9 @@ ros2 topic hz /cmd_vel
 - 원서의 `rqt_plot` 사용(PDF p.137~138)은 ROS 2에서도 같은 개념이며, 필드 경로를 `/cmd_vel/twist/linear/x`처럼 TwistStamped 구조에 맞춰 적습니다.
 
 ## 7. 이 문서의 검증 상태
+
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함:
   - `ros2 pkg create` 결과와 네 노드를 `~/guide_verify/C/ws`에서 빌드했고, `ament_flake8`, `ament_pep257` 검사에서 문제가 없었습니다.
   - `key_publisher`를 가상 터미널(pty)에서 실행해 `w`, `a`, `d`가 `/keys`로 나오고 위쪽 화살표가 세 메시지(`\e`, `[`, `A`)로 나오는 것을 확인했습니다(Fast DDS 실행). 터미널 없이 실행하면 `termios.error: (25, 'Inappropriate ioctl for device')`로 끝나는 것을 확인했습니다.
@@ -803,3 +806,5 @@ ros2 topic hz /cmd_vel
   - `--qos-durability transient_local` echo와 `/keys`의 비호환 경고, yaml 노드 이름 오타, `declare_parameter` 생략 시 예외, `linear_accel` 0과 음수의 동작: 확인 못 함(규칙과 코드에서 유추).
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 미검증 표시(2026-10-31): 실습 8-2, 8-6, 8-7에 미검증 실습 표시를 붙였고, 4절의 yaml 노드 이름 오타 행, 운전 중 노드 종료 행, `transient_local` echo 행, rviz2 `use_sim_time` 행에 (미검증)을 붙였습니다.
+
+</details>

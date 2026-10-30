@@ -744,6 +744,8 @@ ROS 배포판(Jazzy), OS(Ubuntu 24.04 on WSL2), WSL 네트워크 모드(`network
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (2026-10-27, 검증용 별도 워크스페이스, `ROS_DOMAIN_ID` 분리, `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`, daemon 미리 실행 또는 `--no-daemon`):
   - 실습 21-1의 모든 레벨 실행 결과(기본, 로거별 debug, 전체 debug의 `rcl`/`rmw_cyclonedds_cpp` 로그, warn), 출력 형식 환경 변수, `~/.ros/log/python3_<pid>_<시각>.log` 파일 생성.
   - `/rosout` 의 QoS(RELIABLE, KEEP_LAST 1000, TRANSIENT_LOCAL, Lifespan 10 s), `echo --once` 필드 내용, `--field msg`, 로거 서비스 두 개와 get/set 호출 결과, set 후 DEBUG 출력.
@@ -765,3 +767,5 @@ ROS 배포판(Jazzy), OS(Ubuntu 24.04 on WSL2), WSL 네트워크 모드(`network
   - README에 있던 환경 설명이 `appendix_wsl_environment.md` 로 옮겨져서 1절과 실습 21-8의 참조를 바꿨습니다.
   - 실습 21-3의 rqt_graph 체크 상자 이름("Dead sinks", "Leaf topics")과 처음에 켜져 있는 상태는 설치된 `rqt_graph/resource/RosGraph.ui` 와 `rqt_graph/ros_graph.py` 에서 확인했습니다. 화면을 띄워 보지는 않았습니다.
 - 미검증 표시(2026-10-31): GUI를 띄워야 하는 실습 21-2(rqt_console), 21-3(rqt_graph), 21-5(rqt_plot, PlotJuggler), 21-6(Gazebo, rviz2), 21-7(rqt_bag)에 미검증 실습 표시를 붙였고, 4절의 `enable_logger_service` 삭제 행, 노드 종료 행, `use_sim_time` 불일치 행에 (미검증)을 붙였습니다.
+
+</details>

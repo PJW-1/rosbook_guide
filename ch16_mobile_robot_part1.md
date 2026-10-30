@@ -949,6 +949,8 @@ Gazebo 속 로봇은 그대로 움직입니다. DiffDrive는 Gazebo 토픽 `cmd_
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (WSL Ubuntu 24.04, ROS 2 Jazzy, `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`, 이 문서와 같은 파일을 별도 워크스페이스에서 빌드):
   - `apt-cache policy`: `ros-jazzy-joint-state-publisher-gui`만 미설치, 나머지 사용 패키지는 설치됨.
   - `colcon build` 성공, 설치 폴더에 launch, urdf, config, worlds 파일 복사.
@@ -963,3 +965,5 @@ Gazebo 속 로봇은 그대로 움직입니다. DiffDrive는 Gazebo 토픽 `cmd_
   - 4절의 둘째, 셋째, 넷째, 다섯째, 여섯째 줄은 예상 증상이며 재현하지 않았습니다.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 미검증 표시(2026-10-31): 실습 16-4, 16-6, 16-7에 미검증 실습 표시를 붙였고, 4절의 둘째~여섯째 행에 (미검증)을 붙였습니다.
+
+</details>

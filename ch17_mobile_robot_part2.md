@@ -561,6 +561,8 @@ amcl의 입자(particle)들이 틀린 곳에 퍼지고, 레이저 점이 지도 
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (WSL Ubuntu 24.04, ROS 2 Jazzy, `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`, 이 문서와 같은 파일을 별도 워크스페이스에서 빌드):
   - 레이저 포함 모델의 `xacro`, `check_urdf` 트리, `gz sdf -k`(`gz_frame_id` 경고와 `Valid.`), `gz sdf -p`에서 센서와 플러그인 확인.
   - `robot_state_publisher` + `joint_state_publisher`(GUI 없는 판) + 가짜 드라이버로 `view_frames` 트리와 `tf2_echo odom laser_link`(z 0.160).
@@ -580,3 +582,5 @@ amcl의 입자(particle)들이 틀린 곳에 퍼지고, 레이저 점이 지도 
   - `empty.sdf`에 Sensors 시스템이 들어 있는지는 확인하지 않았습니다(17-2 해설에 "않을 수 있으므로"로 적음).
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 미검증 표시(2026-10-31): 실습 17-3, 17-5에 미검증 실습 표시를 붙였고, 4절의 모든 행(6개)에 (미검증)을 붙였습니다.
+
+</details>

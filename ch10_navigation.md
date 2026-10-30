@@ -780,6 +780,8 @@ planner_server가 경로를 찾지 못해 실패를 알리고, bt_navigator는 �
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (설치된 Jazzy에서 직접 실행 또는 파일 확인):
   - 패키지 설치와 버전: `apt-cache policy`로 ros-jazzy-navigation2, ros-jazzy-nav2-bringup, ros-jazzy-nav2-simple-commander 1.3.13, ros-jazzy-turtlebot3-navigation2 2.3.6.
   - `ros2 interface show`로 `nav2_msgs/action/NavigateToPose`, `geometry_msgs/msg/PoseWithCovarianceStamped`, `nav2_msgs/msg/ParticleCloud`.
@@ -794,3 +796,5 @@ planner_server가 경로를 찾지 못해 실패를 알리고, bt_navigator는 �
   - 4절 표 중 `use_sim_time` 누락, 초기 위치 없이 목표 전송, 텔레옵 충돌, controller_server 비활성화, `/amcl_pose` VOLATILE 실험의 실제 출력.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 미검증 표시(2026-10-31): 실습 10-2~10-6에 미검증 실습 표시를 붙였고, 4절의 `use_sim_time` 누락 두 행, 초기 위치 없이 목표 전송 행, 텔레옵 충돌 행, controller_server 비활성화 행, `/amcl_pose` VOLATILE 행에 (미검증)을 붙였습니다. 실습 10-2의 composition 참조를 "2장 1절과 실습 2-10에서 본 composition"으로 고쳤습니다.
+
+</details>

@@ -617,6 +617,8 @@ TypeError
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (2026-10-27, WSL2 Ubuntu 24.04, ROS 2 Jazzy, `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`, 별도 검증 워크스페이스와 `ROS_DOMAIN_ID=22`):
   - `basics_interfaces`에 `Complex.msg`와 `WordCount.srv`를 넣은 형태로 `colcon build` 성공, `ros2 interface show`와 `ros2 interface package` 출력.
   - `service_server`, `service_client`, `periodic_client`를 이 문서의 코드 그대로 빌드, 실행해서 3절의 출력을 얻었습니다. 3절의 출력은 그 실행에서 옮겼고 타임스탬프만 `...`로 줄였습니다.
@@ -630,3 +632,5 @@ TypeError
   - 학습자의 실제 `~/rosbook_ws`에서의 빌드. 3장 담당자가 만든 `basics`와 `basics_interfaces`의 실제 내용은 보지 않았고, CONVENTIONS 5절의 형태를 같은 모양으로 직접 만들어 검증했습니다.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 결함 수정(2026-10-31): Q2와 4절의 `return response` 삭제 행을 실행 결과에 맞췄습니다. `checks/service_returns_none.sh`에서 콜백이 `None`을 돌려주게 한 서버에 `ros2 service call`을 보내자, 서버는 `rclpy/service.py` 75번 줄의 `raise TypeError()`로 끝나는 트레이스백을 남기고 종료했고, 클라이언트는 `requester: making request: ...`만 출력한 채 10초 동안 응답을 받지 못했습니다.
+
+</details>

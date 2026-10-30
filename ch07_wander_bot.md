@@ -553,6 +553,9 @@ Waffle Pi는 1도 간격이므로 정면 인덱스 0을 중심으로 -15~+15입�
 - 원서는 `rospy.Publisher`를 `init_node`보다 먼저 만듭니다. ROS 2에서는 노드 객체가 있어야 publisher를 만들 수 있으므로 순서가 항상 노드 생성 뒤입니다.
 
 ## 7. 이 문서의 검증 상태
+
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함:
   - `ros2 pkg create` 결과물과 생성된 `package.xml`, `setup.py`를 확인했고, 세 노드를 `~/guide_verify/C/ws`에서 `colcon build --symlink-install`로 빌드했습니다. `ament_flake8`, `ament_pep257` 검사에서 문제가 없었습니다.
   - Cyclone DDS 환경에서: `red_light_green_light`가 3초마다 green/red를 바꾸고 `/cmd_vel`을 10 Hz로 내며 echo에 0.0과 0.2가 나오는 것, `use_sim_time:=true`이고 `/clock`이 없으면 발행이 0건인 것을 확인했습니다.
@@ -571,3 +574,5 @@ Waffle Pi는 1도 간격이므로 정면 인덱스 0을 중심으로 -15~+15입�
   - "QoS를 10으로 바꾼 range_ahead가 best_effort publisher를 못 받는다"는 행은 위 reliable echo 결과에서 유추했습니다. 노드 코드를 바꾼 실행은 하지 않았습니다.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 미검증 표시(2026-10-31): 실습 7-2, 7-4, 7-5에 미검증 실습 표시를 붙였고, 4절의 `wander` Ctrl-C 종료 행과 `range_ahead` QoS를 10으로 바꾸는 행에 (미검증)을 붙였습니다.
+
+</details>

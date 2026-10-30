@@ -399,6 +399,9 @@ Gazebo 안의 LiDAR 센서는 그대로 동작하고 `gz topic -l`에도 계속 
 - 카메라 영상은 브리지 yaml이 아니라 `image_bridge` 노드가 담당한다는 점은 원서에 없는 내용입니다.
 
 ## 7. 이 문서의 검증 상태
+
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함:
   - 설치 버전: `apt-cache policy`로 `ros-jazzy-turtlebot3-gazebo` 2.3.7, `ros-jazzy-ros-gz-bridge` 1.0.24, `ros-jazzy-rviz2` 14.1.24, `ros-jazzy-rqt-graph` 1.5.6이 설치되어 있음을 확인했습니다.
   - 브리지 yaml 내용, `turtlebot3_world.launch.py`, `spawn_turtlebot3.launch.py`, `robot_state_publisher.launch.py`의 인자와 노드 구성을 파일을 직접 읽어 확인했습니다.
@@ -415,3 +418,5 @@ Gazebo 안의 LiDAR 센서는 그대로 동작하고 `gz topic -l`에도 계속 
   - 브리지 노드만 끄는 실험의 정확한 증상: 확인 못 함(시뮬 필요).
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 결함 수정(2026-10-31): 실습 6-6에서 `tf2_echo odom base_scan`의 x가 생성 위치 -2.0을 포함한다고 쓴 설명을 고쳤습니다. 로봇이 움직이지 않았다면 Translation은 `[-0.064, 0.000, 0.132]` 근처이고, 생성 위치 (-2.0, -0.5)는 Gazebo 월드 좌표에서 `odom` 원점이 놓이는 곳이라고 나눠 적었습니다. 근거는 `turtlebot3_gazebo/models/turtlebot3_waffle_pi/model.sdf`의 DiffDrive 설정(`frame_id` odom, `child_frame_id` base_footprint, `tf_topic` /tf), 위치를 0에서 적분하는 DiffDrive 오도메트리 동작(`gz/math/DiffDriveOdometry.hh`에는 초기 위치를 정하는 함수가 없음), `turtlebot3_world.launch.py`의 `x_pose` -2.0, `y_pose` -0.5 기본값, `spawn_turtlebot3.launch.py`의 `create` 인자(yaw 없음), URDF의 `base_joint` 0.010과 `scan_joint` 0.122입니다. 시뮬은 실행하지 않았습니다. 실제 시뮬이 필요한 실습 6-1, 6-4, 6-5, 6-6, 6-7과 4절의 브리지 종료, rviz2 경고 행에 미검증 표시를 달았습니다.
+
+</details>

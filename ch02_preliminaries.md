@@ -986,6 +986,8 @@ listener 하나는 토픽 하나만 구독하므로, 그대로는 둘 중 하나
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (2026-10-27, WSL2 Ubuntu 24.04, ROS 2 Jazzy, `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`, 검증용 `ROS_DOMAIN_ID=21`, `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`, 별도 검증 워크스페이스):
   - `ros2 node list -a`에 `/_ros2cli_daemon_21_<16진수>` 노드가 보임. `ros2 daemon start`, `ros2 daemon stop`은 각각 1초 안에 끝남.
   - daemon이 없을 때 `ros2 daemon status`가 60초 제한에, `ros2 node list`가 약 2분 17초 뒤 `TimeoutError`로 끝남. 같은 PC에서 닫힌 localhost 포트로의 TCP 연결이 100초 제한까지 멈추는 것도 확인함.
@@ -1007,3 +1009,5 @@ listener 하나는 토픽 하나만 구독하므로, 그대로는 둘 중 하나
   - 끄기 전에 이미 변환을 받아 둔 `tf2_echo`가 계속 출력하는지 (Q8 뒷부분).
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 결함 수정(2026-10-31): 실습 2-1의 관찰을 고쳤습니다. rqt_graph는 기본 설정에서 "Hide:" 뒤의 Debug(`quiet`), Params, Dead sinks, Leaf topics 체크가 켜져 있어 `/rosout`과 `/parameter_events`를 숨기므로, 드롭다운만 바꾸면 이 토픽이 보이지 않습니다. 근거는 `/opt/ros/jazzy/lib/python3.12/site-packages/rqt_graph/` 아래 `dotcode.py` 54~56줄(`QUIET_NAMES`), 344~357줄(`_quiet_filter`, `quiet_filter_topic_edge`), 435~471줄(`_filter_leaf_topics`), 629~676줄(`_filter_hidden_topics`의 `parameter_events`), `ros_graph.py` 141~146줄(드롭다운 항목과 기본값 "Nodes only"), 241~263줄(체크 기본값과 저장된 설정 복원), `share/rqt_graph/resource/RosGraph.ui`의 체크 상자 글자입니다. 4절의 launch 파일 `data_files` 행을 고쳤습니다. 같은 워크스페이스에서 줄을 지우고 다시 빌드하면 `--symlink-install`이 만든 링크가 남아 `ros2 launch`가 계속 성공하고, `build/basics`와 `install/basics`를 지운 뒤 다시 빌드해야 share 폴더에 없다는 오류가 나는 것을 `checks/stale_launch_install.sh`로 `/tmp`의 검증 워크스페이스에서 확인했습니다. 1절에 composition 문단과 예시를, 3절에 실습 2-10을, 5절에 Q9를 더했습니다. 실습 2-10의 명령과 출력은 `checks/composition_demo.sh`로 다른 talker와 listener가 없는 상태에서 확인했습니다. Q9의 답은 따로 실행해 확인하지 않았습니다. 그 밖에 WSL2 환경에만 해당하는 설명(daemon의 포트와 숨은 노드 이름의 구조, daemon이 없을 때 약 2분 멈추는 현상, Fast DDS 문제)을 `appendix_wsl_environment.md`로 옮겼고, 실습 2-1, 2-2, 2-8, 2-9에 미검증 표시를 달았습니다. 4절의 daemon 행에 적은 일반 환경의 동작(daemon을 새로 띄우고 이번 명령은 직접 노드로 처리)은 `ros2cli/node/strategy.py` 30~40줄에서 확인했고, 따로 실행하지는 않았습니다.
+
+</details>

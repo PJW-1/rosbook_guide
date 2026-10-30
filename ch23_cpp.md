@@ -619,6 +619,8 @@ CMake 설정 단계는 통과할 가능성이 큽니다. 대신 `${basics_interf
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (2026-10-27, 검증용 별도 워크스페이스, `ROS_DOMAIN_ID` 분리, `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`):
   - `ros2 pkg create --build-type ament_cmake --license Apache-2.0 basics_cpp --dependencies rclcpp std_msgs` 로 만든 골격(이후 `basics_interfaces` 의존성은 손으로 추가해 검증).
   - 이 문서의 세 소스 파일, `CMakeLists.txt`, `package.xml` 그대로 `colcon build --symlink-install` 성공. `ros2 pkg executables basics_cpp` 세 줄, 설치 폴더의 심볼릭 링크, `ldd` 의 `librclcpp.so`.
@@ -636,3 +638,5 @@ CMake 설정 단계는 통과할 가능성이 큽니다. 대신 `${basics_interf
   - 4절의 `install(TARGETS ...)` 행에 이전 빌드 결과를 지우는 단계를 넣었습니다. `checks/stale_cmake_install.sh` 에서 블록을 지우고 같은 워크스페이스에서 다시 빌드만 하면 `install/` 에 전에 만든 링크가 남아 `ros2 run basics_cpp topic_publisher` 가 그대로 실행됐고, `build/basics_cpp` 와 `install/basics_cpp` 를 지운 뒤 다시 빌드하면 `No executable found` 가 나왔으며 `install/basics_cpp/lib/basics_cpp/` 폴더가 없었습니다. 위 "확인함"의 `No executable found` 는 깨끗한 상태에서 빌드한 결과였던 것으로 봅니다.
   - 4절의 지역 변수 타이머 행을 예상에서 확인한 결과로 바꿨습니다. `checks/rclcpp_local_timer.sh` 에서 200 ms 타이머를 멤버 변수에 담은 노드는 3초 동안 로그를 13번 남겼고, 생성자의 지역 변수로만 받은 노드는 3초 동안 살아 있었지만 한 번도 남기지 않았습니다. 근거 코드는 rclcpp의 콜백 그룹이 타이머를 `std::weak_ptr` 로 보관하는 부분입니다.
 - 미검증 표시(2026-10-31): 4절의 `package.xml` 의존성 삭제 행에 (미검증)을 붙였습니다.
+
+</details>

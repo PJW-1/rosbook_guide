@@ -883,6 +883,8 @@ QoS 불일치는 이 장의 코드로는 만들기 어렵습니다. 액션의 �
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (2026-10-27, WSL2 Ubuntu 24.04, ROS 2 Jazzy, `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`, 별도 검증 워크스페이스와 `ROS_DOMAIN_ID=22`):
   - `basics_interfaces`에 `Timer.action`을 추가해 깨끗한 빌드 성공, `ros2 interface show` 출력, `Timer_SendGoal` 등이 `not found`로 나오는 것. `builtin_interfaces` 의존 세 줄은 넣은 빌드와 넣지 않은 빌드 모두 성공했습니다.
   - 반복문 뒤 취소 확인을 넣은 `fancy_action_server`에서 3초 goal을 2.5초에 취소하면 `CANCELED`(걸린 시간 3.001초)로 끝나는 것. 취소를 수락한 뒤 `succeed()`를 부르면 클라이언트가 `SUCCEEDED`를 받는 것은 `example_interfaces/action/Fibonacci`로 만든 같은 구조의 서버로 확인했습니다.
@@ -903,3 +905,5 @@ QoS 불일치는 이 장의 코드로는 만들기 어렵습니다. 액션의 �
   - Q4(`checks/action_cancel_reject.sh`): 취소 콜백이 `REJECT`를 돌려주거나 콜백을 주지 않으면 취소 응답이 `return_code=0 goals_canceling=0`, 서버의 `is_cancel_requested`가 `False`, 최종 상태가 4였습니다. 처음 답은 "응답이 거절로 돌아온다"고만 적어 `return_code`가 1(`ERROR_REJECTED`)일 것처럼 읽혔는데, rclpy `action/server.py`는 거절한 goal을 `goals_canceling`에서 빼기만 하고 `return_code`를 바꾸지 않습니다. 비교용으로 취소를 수락하고 `canceled()`를 부르지 않는 서버는 `goals_canceling=1`, `is_cancel_requested`가 `True`, 최종 상태 4였습니다.
   - Q5(`checks/action_simple_server.sh`): goal이 수락된 뒤 클라이언트를 SIGINT로 끝내도 서버가 그 goal을 끝까지 실행했습니다.
 - 미검증 표시(2026-10-31): 실습 5-3에 rqt_graph 부분을 확인하지 못했다는 미검증 실습 표시를 붙였고, 4절의 `succeed()` 삭제 행에 (미검증)을 붙였습니다.
+
+</details>

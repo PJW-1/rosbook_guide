@@ -942,6 +942,8 @@ ros2 action info /arm_controller/follow_joint_trajectory
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (2026-10-27, WSL Ubuntu 24.04, Jazzy, 별도 작업 공간 `~/guide_verify/E/ws`):
   - 맨 위 apt 패키지 이름과 후보 버전: `apt-cache policy`로 확인했습니다. 모두 아직 설치되지 않은 상태입니다. xacro, robot_state_publisher, joint_state_publisher, ros_gz_sim, ros_gz_bridge, joint_state_broadcaster, hardware_interface(mock_components/GenericSystem 포함), control_msgs는 이미 설치되어 있습니다.
   - `cougarbot` 패키지(이 문서의 xacro, yaml, launch 두 개, CMakeLists, package.xml과 같은 파일): `colcon build` 성공.
@@ -955,3 +957,5 @@ ros2 action info /arm_controller/follow_joint_trajectory
   - MSA가 만드는 파일 이름과 내용(`moveit_controllers.yaml` 모양, CMakeLists의 install, ros2_control 단계 동작), `position_only_ik` 설정, `gz_moveit.launch.py`(moveit_configs_utils 미설치): 확인 못 함.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 미검증 표시(2026-10-31): 실습 18-2~18-7에 미검증 실습 표시를 붙였고, 4절의 모든 행(10개)에 (미검증)을 붙였습니다.
+
+</details>

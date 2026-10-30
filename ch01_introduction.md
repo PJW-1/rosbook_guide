@@ -212,6 +212,8 @@ listener는 종료되지 않고 그대로 기다립니다. 노드는 상대 노�
 
 ## 7. 이 문서의 검증 상태
 
+<details><summary>검증 기록 펼치기</summary>
+
 - 확인함 (2026-10-27, WSL2 Ubuntu 24.04, ROS 2 Jazzy, `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`, 검증용 `ROS_DOMAIN_ID=21`):
   - `printenv | grep -i ros` 출력에 `ROS_VERSION=2`, `ROS_DISTRO=jazzy`, `ROS_PYTHON_VERSION=3`이 있음.
   - `ros2 doctor`: daemon이 떠 있을 때 약 3초 만에 `All 5 checks passed`. daemon이 없을 때는 같은 명령이 4분 30초 걸려 `All 3 checks passed`를 출력했음. 버전 비교 `UserWarning`은 stderr로 나옴.
@@ -224,3 +226,5 @@ listener는 종료되지 않고 그대로 기다립니다. 노드는 상대 노�
   - `ROS_DOMAIN_ID`를 설정하지 않은 기본 도메인 0에서의 실행. 검증은 다른 작업과 섞이지 않도록 도메인 21에서 했습니다.
   - 학습자의 `~/.bashrc`에 `RMW_IMPLEMENTATION`이 실제로 추가되었는지. 이 문서는 추가되어 있다고 전제합니다.
 - 결함 수정(2026-10-31): 4절 도메인 행의 `ROS_DOMAIN_ID=5 ros2 node list`에 `--no-daemon`을 붙였습니다. 이 PC에서는 그 도메인용 daemon이 없으면 이 명령이 멈추기 때문입니다. 근거는 `checks/domain_no_daemon.sh`의 실행 결과입니다. `--no-daemon`을 붙이면 1초 만에 `/listener`가 보였고, 붙이지 않으면 20초 안에 끝나지 않았습니다. README에 있던 환경 설명을 `appendix_wsl_environment.md`로 옮기면서 이 장의 참조도 부록으로 바꿨습니다.
+
+</details>
