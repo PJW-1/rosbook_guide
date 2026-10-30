@@ -24,9 +24,12 @@ run_bg() {
 }
 
 # daemon 은 띄운 폴더를 계속 잡고 있으므로 홈에서 띄웁니다.
+# 이미 떠 있던 daemon 은 다른 곳에서 쓰고 있을 수 있으므로, 이 스크립트가 띄운 경우에만 끝날 때 끕니다.
 start_daemon() {
-  (cd ~ && ros2 daemon start > /dev/null 2>&1)
-  DAEMON_STARTED=1
+  (cd ~ && ros2 daemon start > "$CHECK_TMP/daemon_start.log" 2>&1)
+  if grep -q "The daemon has been started" "$CHECK_TMP/daemon_start.log"; then
+    DAEMON_STARTED=1
+  fi
 }
 
 # 지금까지 띄운 백그라운드 프로세스를 모두 끕니다. Ctrl+C 와 같은 SIGINT 를 먼저 보냅니다.

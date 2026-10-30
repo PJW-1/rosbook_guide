@@ -17,6 +17,7 @@ bash checks/run_all.sh
 - 확인한 항목마다 `PASS:` 또는 `FAIL:`을, 판정 없이 기록만 하는 정보는 `INFO:`를 출력합니다. 마지막 줄은 `ALL PASS` 또는 실패 개수입니다.
 - 작업 폴더는 `/tmp/rosbook_check.XXXXXX`로 새로 만들고 끝날 때 지웁니다. `~/rosbook_ws`는 건드리지 않습니다.
 - 기본 도메인을 피해 스크립트마다 다른 `ROS_DOMAIN_ID`(56~67)를 쓰므로, 실행 중인 다른 노드와 섞이지 않습니다.
+- daemon은 스크립트가 띄운 것만 끝날 때 끕니다. 이미 떠 있던 daemon은 다른 곳에서 쓰고 있을 수 있으므로 그대로 둡니다.
 - RMW는 `RMW_IMPLEMENTATION`이 비어 있으면 Cyclone DDS를 씁니다. `type_mismatch_warning.sh`만 Cyclone DDS와 Fast DDS를 모두 씁니다.
 - 패키지를 임시로 빌드하는 스크립트가 있어서, 모두 실행하면 몇 분 걸립니다.
 
@@ -29,7 +30,7 @@ bash checks/run_all.sh
 | `stale_launch_install.sh` | `setup.py`의 launch `data_files` 줄을 지우고 다시 빌드만 하면 전에 만든 링크로 launch가 그대로 되고, 그 패키지의 `build/`와 `install/`을 지운 뒤에야 실패하는지 | 2장 4절, 20장 4절 |
 | `rclpy_unstored_refs.sh` | rclpy에서 `create_timer`와 `create_subscription`의 반환값을 저장하지 않아도 동작하는지 | 3장 2절, 실습 3-1, Q1 |
 | `topic_pub_waits.sh` | `ros2 topic pub -t 3`이 구독자를 기다렸다가 발행해서 세 메시지가 모두 도착하는지 | 3장 실습 3-7 |
-| `type_mismatch_warning.sh` | 타입이 다른 발행자와 구독자 사이에 경고가 찍히는지를 Cyclone DDS와 Fast DDS에서 비교 | 3장 4절, 21장 실습 21-4, 23장 4절 |
+| `type_mismatch_warning.sh` | 타입이 다른 발행자와 구독자를 다른 프로세스에 만들 때와 한 프로세스에 만들 때, 경고나 오류가 나오는지를 Cyclone DDS와 Fast DDS에서 비교 | 3장 4절, 21장 실습 21-4, 23장 4절 |
 | `service_returns_none.sh` | 서비스 콜백이 `None`을 돌려줄 때 서버와 클라이언트가 어떻게 되는지 | 4장 4절, Q2 |
 | `action_simple_server.sh` | 단일 스레드 액션 서버가 goal 두 개를 차례로 처리하는지, 클라이언트가 꺼진 뒤에도 goal을 끝까지 실행하는지 | 5장 Q2, Q5 |
 | `action_cancel_reject.sh` | 취소 콜백이 거절하거나 없을 때의 취소 응답(`return_code`, `goals_canceling`)과 최종 상태 | 5장 Q4 |
@@ -39,5 +40,5 @@ bash checks/run_all.sh
 ## 새 스크립트를 더할 때
 
 - 맨 앞에서 `common.sh`를 source 하고, 노드를 띄운다면 아직 쓰지 않은 `ROS_DOMAIN_ID`를 정합니다.
-- 백그라운드 프로세스는 `run_bg`로 띄우고 `stop_bg`로 끕니다. 판정은 `pass`, `fail`, 기록은 `info`로 출력하고, 마지막에 `finish`를 부릅니다.
+- 백그라운드 프로세스는 `run_bg`로 띄우고 `stop_bg`로 끕니다. daemon이 필요하면 `start_daemon`으로 띄웁니다. 판정은 `pass`, `fail`, 기록은 `info`로 출력하고, 마지막에 `finish`를 부릅니다.
 - 이 README의 표와, 근거로 쓰는 장의 7절에 스크립트 이름을 적습니다(CONVENTIONS 9-4).

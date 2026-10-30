@@ -5,6 +5,23 @@
 source "$(dirname "$0")/common.sh"
 export ROS_DOMAIN_ID=57
 
+# 도메인 57 의 daemon 프로세스 번호를 출력합니다.
+# daemon 의 명령줄에는 --name ros2-daemon 과 --ros-domain-id 57 이 붙습니다(ros2cli/daemon/daemonize.py).
+daemon_pids() {
+  local p cmd
+  for p in /proc/[0-9]*; do
+    cmd=$(tr '\0' ' ' < "$p/cmdline" 2> /dev/null)
+    if [[ "$cmd" == *"--name ros2-daemon "* && "$cmd" == *"--ros-domain-id 57 "* ]]; then
+      echo "${p#/proc/}"
+    fi
+  done
+}
+# 이미 떠 있던 daemon 은 다른 곳에서 쓰고 있을 수 있으므로 끝날 때 끄지 않습니다.
+daemons_before=$(daemon_pids)
+if [ -n "$daemons_before" ]; then
+  info "도메인 57 에 이미 daemon 이 있으므로, --no-daemon 없이 실행한 결과는 daemon 이 없을 때의 동작이 아님"
+fi
+
 run_bg "$CHECK_TMP/listener.log" ros2 run demo_nodes_py listener
 sleep 3
 
@@ -29,11 +46,10 @@ else
   info "--no-daemon 없이 실행한 명령이 ${elapsed}초 만에 끝남 (rc=$rc)"
 fi
 
-# --no-daemon 없이 실행한 명령이 도메인 57 의 daemon 을 띄웠다면 끕니다.
-for p in /proc/[0-9]*; do
-  if tr '\0' ' ' < "$p/cmdline" 2> /dev/null | grep -q "_ros2_daemon" \
-    && tr '\0' '\n' < "$p/environ" 2> /dev/null | grep -qx "ROS_DOMAIN_ID=57"; then
-    kill "${p#/proc/}"
+# --no-daemon 없이 실행한 명령이 도메인 57 에 daemon 을 새로 띄웠다면 그것만 끕니다.
+for pid in $(daemon_pids); do
+  if ! echo "$daemons_before" | grep -qx "$pid"; then
+    kill "$pid"
   fi
 done
 finish
