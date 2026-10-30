@@ -5,23 +5,23 @@
 - 새로 설치할 것: 없음 (`demo_nodes_py`, `tf2_ros`, `tf2_tools`, `rqt_graph`, `rviz2`, graphviz가 이미 설치되어 있습니다)
 
 ## 이 장에서 체감할 구조
-노드는 DDS 디스커버리로 서로를 직접 찾고, `ros2` CLI는 daemon이라는 숨은 노드에 모아 둔 그래프 정보를 빌려 씁니다.
+노드는 같은 도메인 안에서 DDS 디스커버리로 서로를 직접 찾아 ROS 그래프를 이루고, 메시지는 노드 사이를 곧장 오갑니다.
 노드와 토픽의 최종 이름은 코드에 적힌 이름에 네임스페이스와 리매핑을 적용해서 실행할 때 정해집니다.
 패키지는 워크스페이스에서 빌드되어 `install/`에 설치되고, `setup.bash`를 source 해야 ROS 2가 그 패키지를 찾습니다.
 
 ```mermaid
 flowchart LR
-  subgraph dom0 ["도메인 0 (ROS_DOMAIN_ID=0)"]
-    talker("/talker 노드") -->|"std_msgs/msg/String"| chatter["/chatter"]
-    chatter --> listener("/listener 노드")
-    daemon("/_ros2cli_daemon_0_16진수<br/>숨은 daemon 노드")
-    talker -.->|"디스커버리 정보"| daemon
-    listener -.->|"디스커버리 정보"| daemon
+  subgraph dom0 ["도메인 0"]
+    talker("/robot1/talker 노드") -->|"std_msgs/msg/String"| chatter["/robot1/chatter"]
+    chatter --> listener("/robot1/listener 노드")
+    talker -.->|"DDS 디스커버리"| listener
   end
-  cli[("터미널의 ros2 명령<br/>ros2 node list 등")] -.->|"127.0.0.1:11511 로 질문"| daemon
+  src[("src/basics<br/>launch 파일")] -.->|"colcon build"| inst[("install/basics<br/>source 한 뒤 찾을 수 있음")]
+  inst -.->|"ros2 launch basics"| talker
+  codename[("코드 속 이름 chatter<br/>namespace=robot1")] -.->|"최종 이름"| chatter
 ```
 
-그림에서 볼 것: 메시지(실선)는 talker에서 listener로 곧장 가고 daemon을 거치지 않습니다. daemon은 디스커버리 정보만 받아 두었다가(점선), `ros2` 명령이 DDS가 아닌 localhost 연결로 물어 오면 답합니다. 포트 11511은 도메인 0일 때의 값이고, 도메인 번호만큼 더해집니다.
+그림에서 볼 것: 메시지(실선)는 talker에서 listener로 곧장 갑니다. 두 노드는 그 전에 디스커버리(점선)로 서로를 찾습니다. 토픽의 최종 이름 `/robot1/chatter`는 코드 속 이름에 네임스페이스가 붙어 정해지고, 이 노드들을 띄우는 launch 파일은 빌드되어 `install/`에 있어야 `ros2 launch`가 찾습니다(실습 2-7). `ros2` 명령이 쓰는 daemon은 그래프 정보를 모아 두는 캐시라서 이 연결에 끼어들지 않습니다(1절).
 
 ## 1. 목표와 개념
 
@@ -37,6 +37,17 @@ ros2 node info /listener
 
 `Subscribers:` 아래의 `/chatter: std_msgs/msg/String`이 그래프에서 listener로 들어오는 선 하나입니다(실습 2-1).
 
+**composition.** 노드를 컴포넌트(component)라는 형태로 작성하면, 컨테이너(container)라는 프로세스 하나에 노드 여러 개를 올려 실행할 수 있습니다. 이렇게 노드를 한 프로세스에 모으는 것을 composition이라고 합니다. 그래프에는 여전히 노드 여러 개로 보이지만, 운영체제에서 보면 프로세스는 하나입니다. Nav2도 기본으로 이렇게 노드들을 컨테이너 하나에 올려 시작합니다(10장, 17장). 프로세스를 여러 개 띄우는 부담이 줄어드는 대신, 컴포넌트 하나가 죽으면 같은 컨테이너에 있는 컴포넌트가 모두 함께 멈춥니다.
+
+예:
+
+```bash
+ros2 run rclcpp_components component_container
+ros2 component load /ComponentManager composition composition::Talker
+```
+
+첫 줄은 빈 컨테이너 프로세스를 띄우고, 둘째 줄은 다른 터미널에서 그 컨테이너 안에 talker 노드를 올립니다(실습 2-10).
+
 **디스커버리.** ROS 2에는 `roscore`가 없습니다. 각 노드는 시작할 때 DDS 디스커버리로 자기 정보(노드 이름, 발행·구독하는 토픽과 타입, QoS)를 같은 도메인의 참여자들에게 알리고, 다른 참여자의 정보도 받아 둡니다. 이름과 타입과 QoS가 맞는 publisher와 subscriber가 서로를 발견하면 직접 연결합니다. `ROS_DOMAIN_ID`(기본값 0)가 다른 노드끼리는 서로를 발견하지 않습니다. `ROS_AUTOMATIC_DISCOVERY_RANGE`는 디스커버리 범위를 같은 컴퓨터(`LOCALHOST`)나 같은 네트워크(`SUBNET`) 등으로 정합니다.
 
 예:
@@ -47,7 +58,7 @@ ROS_DOMAIN_ID=5 ros2 run demo_nodes_py listener
 
 이 listener는 도메인 0의 talker를 발견하지 못하므로 아무것도 받지 못합니다(실습 2-2). 환경 변수 하나로 그래프가 둘로 나뉩니다.
 
-**CLI.** CLI(Command Line Interface, 명령줄 인터페이스)는 창과 버튼 대신 터미널에 명령을 글자로 입력해서 프로그램을 다루는 방식입니다. Claude Code나 Codex를 터미널에서 쓰는 것도 같은 방식입니다. ROS 2의 CLI는 `ros2`라는 명령 하나로 시작하고, 그 뒤에 무엇을 다룰지 고르는 하위 명령(`node`, `topic`, `service`, `pkg`, `launch`, `daemon` 등)과 무엇을 할지 고르는 동사(`list`, `info`, `echo` 등)를 붙입니다. 그래프를 그림으로 보는 GUI 도구도 있습니다. `rqt_graph`는 노드와 토픽의 연결을, `rviz2`는 좌표계와 센서 데이터를 3차원으로 보여 줍니다.
+**CLI.** CLI(Command Line Interface, 명령줄 인터페이스)는 창과 버튼 대신 터미널에 명령을 글자로 입력해서 프로그램을 다루는 방식입니다. ROS 2의 CLI는 `ros2`라는 명령 하나로 시작하고, 그 뒤에 무엇을 다룰지 고르는 하위 명령(`node`, `topic`, `service`, `pkg`, `launch`, `daemon` 등)과 무엇을 할지 고르는 동사(`list`, `info`, `echo` 등)를 붙입니다. 그래프를 그림으로 보는 GUI 도구도 있습니다. `rqt_graph`는 노드와 토픽의 연결을, `rviz2`는 좌표계와 센서 데이터를 3차원으로 보여 줍니다.
 
 예:
 
@@ -58,20 +69,18 @@ ros2 topic info -v /tf_static
 
 `ros2` 다음의 `node`, `topic`이 하위 명령이고, `list`, `info`가 동사이고, `-a`, `-v`는 옵션입니다. `ros2 topic -h`처럼 `-h`를 붙이면 그 단계에서 쓸 수 있는 동사와 옵션을 보여 줍니다.
 
-**ros2 daemon.** `ros2 node list` 같은 CLI 명령은 실행될 때마다 새로 디스커버리를 하면 그래프 정보가 다 모일 때까지 기다려야 합니다. 그래서 CLI는 처음 실행될 때 daemon이라는 백그라운드 노드를 띄워 두고, 그 노드가 모아 둔 그래프 정보를 물어봅니다. daemon은 CLI를 위한 캐시일 뿐이고, 노드끼리의 연결에는 끼어들지 않습니다. daemon을 꺼도 talker와 listener는 계속 통신합니다. 이 점이 `roscore`와 다릅니다.
+**ros2 daemon.** `ros2 node list` 같은 CLI 명령은 실행될 때마다 새로 디스커버리를 하면 그래프 정보가 다 모일 때까지 기다려야 합니다. 그래서 CLI는 처음 실행될 때 daemon이라는 백그라운드 노드를 띄워 두고, 그 노드가 모아 둔 그래프 정보를 물어봅니다. daemon은 CLI를 위한 캐시일 뿐이고, 노드끼리의 연결에는 끼어들지 않습니다. daemon을 꺼도 talker와 listener는 계속 통신합니다. 이 점이 `roscore`와 다릅니다. daemon은 2시간 동안 질문이 하나도 없으면 스스로 종료합니다.
 
-daemon은 `127.0.0.1`의 TCP 포트 `11511 + ROS_DOMAIN_ID`에서 XML-RPC라는 방식으로 질문을 받습니다. 도메인마다 포트가 다르므로 daemon도 도메인마다 따로 뜹니다. daemon 자신도 ROS 2 노드라서 그래프에 `/_ros2cli_daemon_0_<16진수>`라는 이름으로 나타납니다. 앞의 `_ros2cli`는 CLI가 만드는 노드의 공통 접두사이고, `0`은 도메인 번호, 끝의 16진수는 띄울 때마다 새로 만드는 고유 번호입니다. 이름의 어느 부분이든 `_`로 시작하면 숨은 노드로 취급되어, `ros2 node list`는 `-a` 없이는 이 노드를 보여 주지 않습니다. 또 daemon은 질문을 받을 때마다 타이머를 다시 시작하고, 2시간 동안 질문이 하나도 없으면 스스로 종료합니다.
-
-CLI가 그래프 정보를 얻는 경로는 두 가지입니다. daemon이 떠 있으면 daemon에게 묻고, 연결이 안 되면 직접 노드로 넘어갑니다. daemon이 없으면 daemon을 새로 띄워 두고, 이번 명령은 직접 노드로 처리합니다. `--no-daemon`을 붙이면 처음부터 직접 노드만 씁니다.
+CLI가 그래프 정보를 얻는 경로는 두 가지입니다. daemon이 떠 있으면 daemon에게 묻습니다. daemon이 없으면 daemon을 새로 띄워 두고, 이번 명령은 그 명령만을 위한 노드(직접 노드)를 만들어 처리합니다. `--no-daemon`을 붙이면 처음부터 직접 노드만 씁니다. daemon을 다시 띄워야 할 때(RMW를 바꾼 뒤, CLI 결과가 실제 상태와 다르게 보일 때)는 `ros2 daemon stop` 직후에 `ros2 daemon start`를 실행합니다. CLI가 daemon에게 묻는 방식과, 이 가이드의 WSL2 환경에서 daemon이 없을 때 생기는 문제는 [부록](appendix_wsl_environment.md)에 있습니다.
 
 ```mermaid
 sequenceDiagram
   participant cli as ros2 node list
   participant d as daemon 노드
-  participant dn as 직접 노드 _ros2cli_PID
+  participant dn as 직접 노드
   participant g as 도메인의 다른 노드들
   alt daemon이 떠 있을 때
-    cli->>d: 127.0.0.1:11511 로 노드 목록 질문
+    cli->>d: 노드 목록 질문
     d-->>cli: 미리 모아 둔 목록
   else daemon을 쓰지 않을 때, --no-daemon
     cli->>dn: 이번 명령만을 위한 노드 생성
@@ -80,7 +89,7 @@ sequenceDiagram
   end
 ```
 
-그림에서 볼 것: 위쪽 경로는 이미 모아 둔 정보를 꺼내므로 빠릅니다. 아래쪽 경로는 명령을 칠 때마다 노드를 새로 만들고 0.5초(`--spin-time`의 기본값) 동안 디스커버리를 기다리므로, 늦게 발견된 노드가 목록에서 빠질 수 있습니다. 직접 노드의 이름은 `_ros2cli_<프로세스 번호>`입니다.
+그림에서 볼 것: 위쪽 경로는 이미 모아 둔 정보를 꺼내므로 빠릅니다. 아래쪽 경로는 명령을 칠 때마다 노드를 새로 만들고 0.5초(`--spin-time`의 기본값) 동안 디스커버리를 기다리므로, 늦게 발견된 노드가 목록에서 빠질 수 있습니다.
 
 예:
 
@@ -90,7 +99,7 @@ ros2 node list --no-daemon
 
 실습 2-2에서 이 명령을 실행하면 같은 목록이 조금 늦게 나옵니다. 모든 명령이 daemon을 쓰는 것은 아닙니다. `ros2 topic pub`은 처음부터 직접 노드로 발행하고, `ros2 topic echo`는 그래프 정보를 물을 때는 daemon을 쓸 수 있지만, 구독은 직접 노드가 만듭니다. 메시지를 실제로 보내거나 받는 일은 daemon이 대신해 주지 않기 때문입니다.
 
-**RMW.** ROS 2 노드는 DDS를 직접 부르지 않고 RMW(ROS MiddleWare) 인터페이스를 거칩니다. RMW 구현체(`rmw_fastrtps_cpp`, `rmw_cyclonedds_cpp` 등)는 환경 변수 `RMW_IMPLEMENTATION`으로 고르고, 노드 코드는 바꾸지 않습니다. 이 가이드의 환경은 Cyclone DDS(`rmw_cyclonedds_cpp`)를 씁니다. 이 PC에서는 Jazzy 기본값인 Fast DDS로 프로세스 사이에 데이터가 전달되지 않는 문제가 있어서 바꿨고, 자세한 이유는 README에 있습니다. 이 사례 자체가 "통신 계층만 바꾸고 노드 코드는 그대로 쓴다"는 RMW 설계의 예입니다. 층으로 보면 노드 코드(rclpy, rclcpp) 아래에 공통 C 라이브러리 rcl이 있고, 그 아래의 rmw 인터페이스가 실제 DDS 구현을 부릅니다. `RMW_IMPLEMENTATION`이 고르는 것은 맨 아래의 DDS 구현뿐입니다. 층 그림은 README의 "왜 Fast DDS 대신 Cyclone DDS를 쓰나요"에 있습니다.
+**RMW.** ROS 2 노드는 DDS를 직접 부르지 않고 RMW(ROS MiddleWare) 인터페이스를 거칩니다. RMW 구현체(`rmw_fastrtps_cpp`, `rmw_cyclonedds_cpp` 등)는 환경 변수 `RMW_IMPLEMENTATION`으로 고르고, 노드 코드는 바꾸지 않습니다. 이 가이드의 환경은 Jazzy 기본값인 Fast DDS 대신 Cyclone DDS(`rmw_cyclonedds_cpp`)를 씁니다. 작성자의 WSL2 환경에서 Fast DDS로는 메시지가 안정적으로 전달되지 않았기 때문이고, 자세한 내용은 [부록](appendix_wsl_environment.md)에 있습니다. 이 사례 자체가 "통신 계층만 바꾸고 노드 코드는 그대로 쓴다"는 RMW 설계의 예입니다. 층으로 보면 노드 코드(rclpy, rclcpp) 아래에 공통 C 라이브러리 rcl이 있고, 그 아래의 rmw 인터페이스가 실제 DDS 구현을 부릅니다. `RMW_IMPLEMENTATION`이 고르는 것은 맨 아래의 DDS 구현뿐입니다. 층 그림은 부록의 "왜 Fast DDS 대신 Cyclone DDS를 쓰나요"에 있습니다.
 
 예:
 
@@ -224,8 +233,7 @@ rclpy.try_shutdown()
 - 남의 패키지를 `src/`에 받아 왔다면, 빌드하기 전에 `cd ~/rosbook_ws && rosdep install --from-paths src --ignore-src -y`로 `package.xml`에 적힌 시스템 의존성을 한 번에 설치합니다. `--ignore-src`는 워크스페이스 안에 소스로 있는 패키지는 설치하지 말라는 뜻입니다. 그래서 `package.xml`의 의존성을 정확히 적는 것이 중요합니다.
 - 같은 이름의 노드는 오류 없이 함께 실행되므로 더 위험합니다(실습 2-6). 같은 노드를 여러 개 띄울 때는 launch 파일에서 네임스페이스나 노드 이름을 처음부터 나눠 둡니다.
 - 같은 네트워크에서 여러 사람이 ROS 2를 쓰면 서로의 노드가 보입니다. 사람이나 로봇마다 다른 `ROS_DOMAIN_ID`를 정해 `~/.bashrc`에 적어 두고, 혼자 실험할 때는 `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`로 같은 컴퓨터 안에만 머물게 합니다.
-- 오래 쉬었다가 돌아왔을 때 `ros2` 명령이 멈추면 daemon부터 의심합니다. daemon은 2시간 동안 질문이 없으면 스스로 종료하고, 이 WSL에서는 daemon이 없으면 CLI가 약 2분 동안 멈춥니다. Ctrl-C로 끊고 `ros2 daemon start`를 실행한 뒤 다시 입력합니다.
-
+- 오래 쉬었다가 돌아왔을 때 `ros2` 명령이 멈추면 daemon부터 의심합니다. daemon은 2시간 동안 질문이 없으면 스스로 종료하고, 이 가이드의 WSL2 환경에서는 daemon이 없으면 CLI가 한참 멈춥니다([부록](appendix_wsl_environment.md)). Ctrl-C로 끊고 `ros2 daemon start`를 실행한 뒤 다시 입력합니다.
 ## 2. 원서(ROS 1)와 달라지는 점
 
 | 원서 (ROS 1) | ROS 2 Jazzy | 이유와 주의점 |
@@ -248,6 +256,8 @@ rclpy.try_shutdown()
 
 ### 실습 2-1. 그래프를 그림으로 보기
 
+> **미검증 실습**: 문서를 쓸 때 rqt_graph 창을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 3개. 터미널 A에서 `ros2 run demo_nodes_py talker`, 터미널 B에서 `ros2 run demo_nodes_py listener`를 실행해 둡니다.
 
 **직접 입력** (터미널 C):
@@ -256,7 +266,9 @@ rclpy.try_shutdown()
 rqt_graph
 ```
 
-**관찰**: 창이 하나 뜨고 `/talker` → `/chatter` → `/listener` 모양의 그림이 보입니다. 왼쪽 위 새로고침 버튼을 누르면 현재 그래프로 다시 그립니다. 위쪽 드롭다운을 "Nodes/Topics (all)"로 바꾸면 `/rosout`, `/parameter_events` 같은 숨은 토픽까지 보입니다. 터미널 A에서 talker를 Ctrl-C로 끄고 새로고침해 보고, 다시 띄우고 새로고침해 봅니다.
+**관찰**: 창이 하나 뜨고 `/talker` → `/chatter` → `/listener` 모양의 그림이 보입니다. 처음 띄우면 위쪽 드롭다운이 "Nodes only"라서 토픽 상자 없이 노드만 보일 수 있습니다. 그때는 드롭다운을 "Nodes/Topics (all)"로 바꿉니다. 왼쪽 위 새로고침 버튼을 누르면 현재 그래프로 다시 그립니다. 터미널 A에서 talker를 Ctrl-C로 끄고 새로고침해 보고, 다시 띄우고 새로고침해 봅니다.
+
+모든 노드가 자동으로 만드는 `/rosout`(로그)과 `/parameter_events`(파라미터 변경 알림)는 기본 설정에서는 그림에 나오지 않습니다. "Hide:"라는 글자 뒤에 있는 체크 상자들이 처음에 켜져 있어서, 이런 토픽을 숨기기 때문입니다. "Debug"는 `/rosout` 같은 디버깅용 이름을, "Params"는 `/parameter_events`를, "Dead sinks"는 구독자가 없는 토픽을, "Leaf topics"는 연결이 하나뿐인 토픽을 숨깁니다. 드롭다운이 "Nodes/Topics (all)"인 상태에서 이 네 개의 체크를 모두 끄면 `/rosout`과 `/parameter_events`가 보입니다. 확인했으면 네 개를 다시 켜 둡니다. rqt는 체크 상태를 기억했다가 다음에 띄울 때 그대로 씁니다.
 
 창을 닫은 뒤 같은 정보를 글자로 봅니다.
 
@@ -270,6 +282,8 @@ ros2 node info /listener
 
 ### 실습 2-2. 디스커버리, 도메인, daemon
 
+> **미검증 실습**: 문서를 쓸 때 daemon을 끄고 켜는 동안 listener가 계속 메시지를 받는지를 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 A에서 talker, 터미널 B에서 listener가 실행 중이어야 합니다.
 
 **직접 입력** (터미널 C):
@@ -278,7 +292,7 @@ ros2 node info /listener
 ros2 node list -a
 ```
 
-**관찰**: `-a`는 숨은 노드까지 모두 보여 달라는 옵션입니다. `/talker`, `/listener` 말고 다음과 같은 노드가 하나 더 보입니다. 가운데 숫자는 도메인 번호이고, 끝의 16진수는 실행할 때마다 달라집니다.
+**관찰**: `-a`는 숨은 노드까지 모두 보여 달라는 옵션입니다. `/talker`, `/listener` 말고 다음과 같은 노드가 하나 더 보입니다. 끝의 16진수는 실행할 때마다 달라집니다.
 
 ```
 /_ros2cli_daemon_0_f1c71c6e119f41ae9a53568e84163be4
@@ -286,7 +300,7 @@ ros2 node list -a
 /talker
 ```
 
-이 노드가 daemon입니다. 이름이 `_`로 시작하는 노드는 숨은 노드로 취급되어 `-a` 없이는 보이지 않습니다. 이제 daemon을 껐다가 다시 켜 봅니다.
+이 노드가 daemon입니다. 이름이 `_`로 시작하는 노드는 숨은 노드로 취급되어 `-a` 없이는 보이지 않습니다. 이름의 각 부분이 무엇을 뜻하는지는 [부록](appendix_wsl_environment.md)에 있습니다. 이제 daemon을 껐다가 다시 켜 봅니다.
 
 ```bash
 ros2 daemon stop
@@ -311,7 +325,7 @@ ROS_DOMAIN_ID=5 ros2 run demo_nodes_py listener
 
 **관찰**: 이 listener는 아무것도 받지 못합니다. 터미널 C에서 `ros2 node list`를 하면 `/talker`만 보이고, `ROS_DOMAIN_ID=5 ros2 node list`를 하면 `/listener`만 보입니다. 확인했으면 listener를 원래대로(`ROS_DOMAIN_ID` 없이) 다시 띄웁니다.
 
-**이 PC에서의 주의점**: 이 WSL은 `127.0.0.1`의 닫힌 포트로 연결을 시도하면 바로 거부되지 않고 시간이 다 될 때까지 기다립니다. `ros2` CLI는 daemon이 떠 있는지 확인하려고 그 포트에 연결해 보므로, 그 도메인에 daemon이 없으면 `ros2 node list`, `ros2 topic list`, `ros2 doctor` 같은 명령이 약 2분 17초 동안 멈췄다가 Python Traceback을 내고 끝납니다. 이럴 때는 Ctrl-C로 멈추고 `ros2 daemon start`를 먼저 실행합니다. `ros2 daemon start`는 daemon이 없어도 1초 안에 끝납니다. `ros2 daemon stop`을 쓴 뒤에는 바로 `ros2 daemon start`를 붙여서, daemon이 없는 상태로 두지 않습니다. 위의 `ROS_DOMAIN_ID=5 ros2 node list`도 도메인 5용 daemon이 따로 필요하므로, 멈추면 `ROS_DOMAIN_ID=5 ros2 node list --no-daemon`으로 실행합니다.
+daemon은 도메인마다 따로 뜨므로, `ROS_DOMAIN_ID=5 ros2 node list`는 도메인 5용 daemon을 씁니다. 이 명령이 바로 끝나지 않고 멈추면 Ctrl-C로 끊고 `ROS_DOMAIN_ID=5 ros2 node list --no-daemon`으로 실행합니다. 이 가이드의 WSL2 환경에서 daemon이 없을 때 명령이 멈추는 이유는 [부록](appendix_wsl_environment.md)에 있습니다.
 
 **생각해 볼 질문**: ROS 1에서 `roscore`를 끄면 이미 연결된 노드끼리는 어떻게 되었을까요? ROS 2에서 daemon을 끈 것과 무엇이 같고 무엇이 다를까요?
 
@@ -685,6 +699,8 @@ ros2 launch basics talker_listener.launch.py -s
 
 ### 실습 2-8. 탭 완성
 
+> **미검증 실습**: 문서를 쓸 때 대화형 셸에서 탭 완성을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 1개.
 
 **직접 입력**: 다음 줄들을 끝까지 치지 말고, `[Tab]` 자리에서 Tab 키를 누릅니다. 후보가 여럿이면 Tab을 두 번 누르면 목록이 나옵니다.
@@ -702,6 +718,8 @@ ros2 interface show std_msgs/msg/St[Tab]
 **생각해 볼 질문**: 실습 2-5에서 `basics`를 만든 직후, 이미 열려 있던 터미널에서 `ros2 run bas[Tab]`이 완성되지 않는다면 이유가 무엇일까요?
 
 ### 실습 2-9. tf2로 좌표계 관계 다루기
+
+> **미검증 실습**: 문서를 쓸 때 rviz2 화면(직접 입력 5)과 `view_frames`가 만든 PDF의 내용(직접 입력 4)을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 3개.
 
@@ -768,7 +786,7 @@ ros2 run tf2_tools view_frames
 ls
 ```
 
-**관찰**: 5초 동안 tf를 듣고 `frames_<날짜시각>.pdf`와 `.gv` 파일을 만듭니다. PDF에는 `base_link` 아래에 `laser`와 `camera`가 매달린 트리가 그려져 있습니다. Windows 탐색기에서 `\\wsl.localhost\Ubuntu\home\<사용자>\tf_frames`를 열어 PDF를 볼 수 있습니다. 글자로 보려면 `cat frames_*.gv`에서 `"base_link" -> "laser"` 줄을 찾습니다.
+**관찰**: 5초 동안 tf를 듣고 `frames_<날짜시각>.pdf`와 `.gv` 파일을 만듭니다. PDF에는 `base_link` 아래에 `laser`와 `camera`가 매달린 트리가 그려져 있습니다. WSL2를 쓴다면 Windows 탐색기에서 `\\wsl.localhost\Ubuntu\home\<사용자>\tf_frames`를 열어 PDF를 볼 수 있습니다. 글자로 보려면 `cat frames_*.gv`에서 `"base_link" -> "laser"` 줄을 찾습니다.
 
 **직접 입력 5: rviz2에서 TF 보기**
 
@@ -786,14 +804,111 @@ rviz2
 
 **생각해 볼 질문**: static_transform_publisher를 모두 끈 뒤에 `tf2_echo base_link laser`를 새로 실행하면 어떻게 될까요? 끄기 전에 이미 실행 중이던 `tf2_echo`는 어떻게 될까요?
 
+### 실습 2-10. 노드 여러 개를 한 프로세스에 담기 (composition)
+
+**준비**: 터미널 2개. 앞 실습에서 띄운 talker, listener, static_transform_publisher를 모두 Ctrl-C로 끕니다. 이 실습의 노드도 `/talker`, `/listener`라는 같은 이름을 쓰기 때문입니다.
+
+**직접 입력 1: 빈 컨테이너 띄우기**
+
+터미널 A:
+
+```bash
+ros2 run rclcpp_components component_container
+```
+
+**관찰**: 명령이 끝나지 않고 실행 상태로 남습니다. 이 프로세스가 컴포넌트를 담을 컨테이너이고, 컨테이너 자신도 `/ComponentManager`라는 노드입니다.
+
+**직접 입력 2: 올릴 수 있는 컴포넌트 확인**
+
+터미널 B:
+
+```bash
+ros2 component types | grep composition
+ros2 component list
+```
+
+**관찰**: 첫 명령은 설치된 패키지 중 `composition` 패키지가 제공하는 컴포넌트를 보여 줍니다. 패키지 이름 아래에 `패키지::클래스` 형식의 이름이 나열됩니다.
+
+```text
+composition
+  composition::Talker
+  composition::Listener
+  composition::NodeLikeListener
+  composition::Server
+  composition::Client
+```
+
+둘째 명령은 실행 중인 컨테이너와 그 안의 컴포넌트를 보여 줍니다. 아직 올린 것이 없으므로 `/ComponentManager` 한 줄만 나옵니다.
+
+**직접 입력 3: talker와 listener 올리기**
+
+터미널 B:
+
+```bash
+ros2 component load /ComponentManager composition composition::Talker
+ros2 component load /ComponentManager composition composition::Listener
+```
+
+**관찰**: 명령마다 한 줄씩 다음이 나옵니다. 앞의 숫자는 컨테이너가 붙인 컴포넌트 번호이고, 끝은 노드 이름입니다.
+
+```text
+Loaded component 1 into '/ComponentManager' container node as '/talker'
+Loaded component 2 into '/ComponentManager' container node as '/listener'
+```
+
+터미널 A에는 컨테이너가 라이브러리 파일을 읽어 들이는 로그와 talker의 로그가 찍히고, listener를 올린 뒤에는 listener의 로그도 같은 터미널에 이어집니다.
+
+```text
+[ComponentManager]: Load Library: /opt/ros/jazzy/lib/libtalker_component.so
+[ComponentManager]: Found class: rclcpp_components::NodeFactoryTemplate<composition::Talker>
+[talker]: Publishing: 'Hello World: 1'
+[listener]: I heard: [Hello World: N]
+```
+
+위는 로그에서 눈여겨볼 줄만 골라 옮긴 것이고, `N` 자리에는 talker가 발행한 번호가 들어갑니다. 라이브러리 파일 `libtalker_component.so` 안의 `composition::Talker` 클래스로 노드를 만들었다는 뜻입니다.
+
+**직접 입력 4: 그래프와 프로세스 비교**
+
+터미널 B:
+
+```bash
+ros2 component list
+ros2 node list
+pgrep -af component_container
+```
+
+**관찰**: `ros2 component list`는 컨테이너 아래에 컴포넌트 두 개를 보여 줍니다.
+
+```text
+/ComponentManager
+  1  /talker
+  2  /listener
+```
+
+`ros2 node list`에는 `/ComponentManager`, `/listener`, `/talker` 세 노드가 보입니다. 그래프에서 보면 1장의 talker, listener와 다르지 않습니다. 그런데 `pgrep -af component_container`는 두 줄만 출력합니다. 첫 줄은 `ros2 run`이 띄운 Python 래퍼(`/usr/bin/python3 /opt/ros/jazzy/bin/ros2 run rclcpp_components component_container`)이고, 둘째 줄은 실제 컨테이너 프로세스(`/opt/ros/jazzy/lib/rclcpp_components/component_container`)입니다. talker나 listener라는 이름의 프로세스는 따로 없습니다. 노드 셋이 프로세스 하나 안에 들어 있습니다.
+
+**직접 입력 5: 컴포넌트 하나 내리기**
+
+터미널 B:
+
+```bash
+ros2 component unload /ComponentManager 1
+ros2 component list
+ros2 node list
+```
+
+**관찰**: `Unloaded component 1 from '/ComponentManager' container node`가 나오고, `ros2 component list`에는 `/ComponentManager` 아래에 `2  /listener`만 남습니다. `ros2 node list`에도 `/ComponentManager`와 `/listener`만 보입니다. 프로세스를 끄지 않고 그 안의 노드 하나만 내렸습니다. 확인했으면 터미널 A에서 Ctrl-C로 컨테이너를 끕니다.
+
+**생각해 볼 질문**: talker와 listener를 각자의 프로세스로 띄울 때와 비교해, 한 컨테이너에 담으면 무엇을 얻고 무엇을 잃을까요?
+
 ## 4. 일부러 망가뜨려 보기
 
 | 바꿀 것 | 예상 증상 | 원인을 확인하는 명령 |
 |---|---|---|
 | listener를 `--ros-args -r chatter:=chater`로 실행 (오타) | listener가 아무것도 받지 못하고, 오류도 나지 않습니다. | `ros2 topic list`에 `/chatter`와 `/chater`가 따로 보입니다. `ros2 topic info /chater`의 Publisher count는 0입니다. |
 | listener만 `ROS_DOMAIN_ID=5`로 실행 | 아무것도 받지 못합니다. | `ros2 node list`와 `ROS_DOMAIN_ID=5 ros2 node list --no-daemon`의 결과를 비교합니다. |
-| `ros2 daemon stop` 후 `ros2 daemon start` 없이 `ros2 node list` | 이 PC에서는 약 2분 동안 출력 없이 멈췄다가 Traceback을 내고 끝납니다. 노드끼리는 계속 통신합니다. | Ctrl-C 후 `ros2 daemon start`, 다시 `ros2 node list`. |
-| `setup.py`에서 launch 파일 `data_files` 줄을 지우고 다시 빌드 | `ros2 launch basics talker_listener.launch.py`가 `file 'talker_listener.launch.py' was not found in the share directory of package 'basics'`로 실패합니다. | `ls ~/rosbook_ws/install/basics/share/basics/` |
+| `ros2 daemon stop` 후 `ros2 daemon start` 없이 `ros2 node list` | CLI가 daemon을 새로 띄우고, 이번 명령은 직접 노드로 처리합니다. 이 가이드의 WSL2 환경에서는 대신 한참 멈췄다가 Traceback을 내고 끝납니다([부록](appendix_wsl_environment.md)). 어느 쪽이든 노드끼리는 계속 통신합니다. | Ctrl-C 후 `ros2 daemon start`, 다시 `ros2 node list`. |
+| 1단계: `setup.py`에서 launch 파일 `data_files` 줄(15번 줄)을 지우고 같은 워크스페이스에서 다시 빌드합니다. 2단계: `cd ~/rosbook_ws && rm -rf build/basics install/basics`로 이 패키지의 빌드 결과를 지우고 다시 빌드합니다. | 1단계 뒤에는 `ros2 launch basics talker_listener.launch.py`가 여전히 성공합니다. 앞서 빌드할 때 만든 링크 `install/basics/share/basics/launch/talker_listener.launch.py`가 지워지지 않고 남아 `build/basics/launch/talker_listener.launch.py`를 가리키기 때문입니다. 설정을 지워도 예전 빌드 결과가 남아 있으면 문제가 드러나지 않습니다. 2단계 뒤에는 `file 'talker_listener.launch.py' was not found in the share directory of package 'basics' which is at '/home/<사용자>/rosbook_ws/install/basics/share/basics'`로 실패하고, `install/basics/share/basics/` 아래에 `launch` 폴더가 없습니다. 확인했으면 지운 줄을 되살리고 다시 빌드합니다. | 1단계 뒤와 2단계 뒤에 각각 `ls -l ~/rosbook_ws/install/basics/share/basics/launch/` |
 | 빌드 후 `source ~/rosbook_ws/install/setup.bash`를 하지 않은 새 패키지 사용 | `Package 'basics' not found` | `echo $AMENT_PREFIX_PATH`, `ros2 pkg prefix basics` |
 | `ros2 run demo_nodes_py talkr` (실행 파일 오타) | `No executable found` | `ros2 pkg executables demo_nodes_py` |
 | launch 파일에서 두 listener의 `namespace`만 지움 | listener 두 개가 모두 `/listener`라는 같은 이름이 되고, 둘 다 `/chatter`를 기다리지만 talker는 `/robot1/chatter`, `/robot2/chatter`에 발행해서 아무것도 받지 못합니다. | `ros2 node list` (같은 이름 경고), `ros2 topic list` |
@@ -850,9 +965,16 @@ listener 하나는 토픽 하나만 구독하므로, 그대로는 둘 중 하나
 
 </details>
 
+<details><summary>Q9. 노드 여러 개를 한 컨테이너에 담으면 무엇을 얻고 무엇을 잃나요?</summary>
+
+얻는 것: 노드마다 프로세스를 따로 띄우지 않으므로 프로세스를 여러 개 띄우는 부담이 줄어듭니다. 또 실습 2-10처럼 실행 중인 컨테이너에 노드를 올리고 내리는 일을 프로세스를 새로 띄우지 않고 할 수 있습니다. 그래프에서는 노드가 따로 실행될 때와 똑같이 보이므로, 다른 노드는 상대가 컴포넌트인지 알 필요가 없습니다.
+잃는 것: 프로세스가 하나이므로, 컴포넌트 하나가 죽으면 같은 컨테이너의 컴포넌트가 모두 함께 멈춥니다. 1절의 "노드 하나는 보통 프로세스 하나라서, 한 노드가 죽어도 나머지는 계속 돕니다"라는 성질을 포기하는 셈입니다. 또 `pgrep`이나 `top` 같은 운영체제 도구로는 어느 노드가 CPU나 메모리를 쓰는지 프로세스 단위로 나눠 볼 수 없습니다.
+
+</details>
+
 ## 6. 원서 대조 메모
 
-- 원서 p.31~32의 `roscore`, `ROS_MASTER_URI`, 포트 11311은 ROS 2에 없습니다. 대신 `ROS_DOMAIN_ID`로 시스템을 나눕니다. ROS 2 CLI의 daemon도 localhost의 포트(11511 + 도메인 번호)를 쓰지만, 노드 간 연결과는 무관합니다.
+- 원서 p.31~32의 `roscore`, `ROS_MASTER_URI`, 포트 11311은 ROS 2에 없습니다. 대신 `ROS_DOMAIN_ID`로 시스템을 나눕니다. ROS 2 CLI의 daemon도 localhost의 포트를 쓰지만([부록](appendix_wsl_environment.md)), 노드 간 연결과는 무관합니다.
 - 원서 p.32의 파라미터 서버는 ROS 2에서 노드별 파라미터로 바뀌었습니다. 8장에서 다룹니다.
 - 원서 p.33~34의 `catkin_init_workspace`와 `devel/`은 colcon에 없습니다. colcon은 `src/`만 있으면 되고, 결과는 `install/`에 모입니다.
 - 원서 p.35~36의 `package.xml` 예시는 format 1(`run_depend`)입니다. `ros2 pkg create`는 format 3을 만들고, 실행 의존성은 `exec_depend`로 적습니다.
@@ -877,10 +999,11 @@ listener 하나는 토픽 하나만 구독하므로, 그대로는 둘 중 하나
   - 탭 완성 스크립트 `ros2-argcomplete.bash`가 `ros2cli`의 환경 훅으로 등록되어 있는 것 (`package.dsv`).
   - `rqt_graph`, `rviz2` 실행 파일이 `/opt/ros/jazzy/bin`에 있는 것, graphviz 설치됨.
 - 확인 못 함:
-  - rqt_graph, rviz2 화면 (GUI). 드롭다운 문구, Fixed Frame 설정, TF 표시 절차는 일반적인 사용법으로 적었고 이 PC에서 띄워 보지 않았습니다.
+  - rqt_graph, rviz2 화면 (GUI). rqt_graph의 드롭다운과 체크 상자 이름, 기본값은 소스에서 확인했지만 화면은 띄워 보지 않았습니다. rviz2의 Fixed Frame 설정과 TF 표시 절차는 일반적인 사용법으로 적었고 이 PC에서 띄워 보지 않았습니다.
   - 탭 완성의 실제 동작 (대화형 셸이 필요).
   - `view_frames`의 PDF 내용과 Windows 탐색기 경로로 여는 방법.
   - daemon을 끄고 켜는 동안 listener가 계속 받는다는 점은 이번 검증 스크립트에서 따로 측정하지 않았습니다. daemon이 노드 연결에 관여하지 않는다는 설계에 근거한 설명입니다.
   - 서로 다른 RMW를 쓰는 노드끼리의 통신, 기본 도메인 0에서의 실행, 학습자의 `~/rosbook_ws`에서의 실제 빌드.
   - 끄기 전에 이미 변환을 받아 둔 `tf2_echo`가 계속 출력하는지 (Q8 뒷부분).
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 결함 수정(2026-10-31): 실습 2-1의 관찰을 고쳤습니다. rqt_graph는 기본 설정에서 "Hide:" 뒤의 Debug(`quiet`), Params, Dead sinks, Leaf topics 체크가 켜져 있어 `/rosout`과 `/parameter_events`를 숨기므로, 드롭다운만 바꾸면 이 토픽이 보이지 않습니다. 근거는 `/opt/ros/jazzy/lib/python3.12/site-packages/rqt_graph/` 아래 `dotcode.py` 54~56줄(`QUIET_NAMES`), 344~357줄(`_quiet_filter`, `quiet_filter_topic_edge`), 435~471줄(`_filter_leaf_topics`), 629~676줄(`_filter_hidden_topics`의 `parameter_events`), `ros_graph.py` 141~146줄(드롭다운 항목과 기본값 "Nodes only"), 241~263줄(체크 기본값과 저장된 설정 복원), `share/rqt_graph/resource/RosGraph.ui`의 체크 상자 글자입니다. 4절의 launch 파일 `data_files` 행을 고쳤습니다. 같은 워크스페이스에서 줄을 지우고 다시 빌드하면 `--symlink-install`이 만든 링크가 남아 `ros2 launch`가 계속 성공하고, `build/basics`와 `install/basics`를 지운 뒤 다시 빌드해야 share 폴더에 없다는 오류가 나는 것을 `checks/stale_launch_install.sh`로 `/tmp`의 검증 워크스페이스에서 확인했습니다. 1절에 composition 문단과 예시를, 3절에 실습 2-10을, 5절에 Q9를 더했습니다. 실습 2-10의 명령과 출력은 `checks/composition_demo.sh`로 다른 talker와 listener가 없는 상태에서 확인했습니다. Q9의 답은 따로 실행해 확인하지 않았습니다. 그 밖에 WSL2 환경에만 해당하는 설명(daemon의 포트와 숨은 노드 이름의 구조, daemon이 없을 때 약 2분 멈추는 현상, Fast DDS 문제)을 `appendix_wsl_environment.md`로 옮겼고, 실습 2-1, 2-2, 2-8, 2-9에 미검증 표시를 달았습니다. 4절의 daemon 행에 적은 일반 환경의 동작(daemon을 새로 띄우고 이번 명령은 직접 노드로 처리)은 `ros2cli/node/strategy.py` 30~40줄에서 확인했고, 따로 실행하지는 않았습니다.
