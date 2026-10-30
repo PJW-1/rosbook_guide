@@ -573,7 +573,7 @@ rviz2에서 Add → By topic → `/particle_cloud`를 추가하면(TurtleBot3 rv
 
 - `ros2 topic info -v /amcl_pose`의 publisher QoS가 `RELIABLE`, `TRANSIENT_LOCAL`입니다. 늦게 켠 노드도 마지막 위치를 받습니다. 실습 10-6의 nav2_simple_commander도 이 점을 이용해 amcl이 준비되었는지 확인합니다.
 - `/amcl_pose`의 `covariance`(36개 값)는 위치 추정이 얼마나 불확실한지를 나타냅니다. 처음에는 x, y 칸(0번, 7번 값)이 크고, 움직이면서 작아집니다.
-- 초기 위치를 준 뒤 `view_frames`를 실행하면 `map → odom → base_footprint` 트리가 완성되어 있고, `map → odom`의 broadcaster가 `amcl`입니다. 9장에서는 같은 자리에 `slam_toolbox`가 있었습니다.
+- 초기 위치를 준 뒤 `view_frames`를 실행하면 `map → odom → base_footprint` 트리가 완성되어 있습니다. 이제 `map → odom`을 내는 노드는 `amcl`이고, 9장에서는 같은 자리에 `slam_toolbox`가 있었습니다. PDF의 Broadcaster 칸에는 9장 실습 9-5에서 본 것처럼 노드 이름 대신 `default_authority`가 적히므로, 각 변환을 내는 노드는 다음 목록으로 정리합니다.
   - `map → odom`: amcl (`tf_broadcast: true`)
   - `odom → base_footprint`: Gazebo DiffDrive 플러그인 → ros_gz_bridge
   - `base_footprint → base_link`, `base_scan` 등: robot_state_publisher
@@ -612,7 +612,7 @@ ros2 topic hz /cmd_vel
 
 **준비**: 실습 10-3까지 마친 상태 (초기 위치가 잡혀 있어야 합니다).
 
-**좌표 정하기**: 9장의 slam_toolbox 지도는 SLAM을 시작한 로봇 위치가 원점입니다. TurtleBot3 world 시뮬은 로봇을 Gazebo 좌표 (-2.0, -0.5)에 놓으므로(`turtlebot3_world.launch.py`의 `x_pose`, `y_pose` 기본값), 지도 좌표 (x, y)는 Gazebo 좌표 (x - 2.0, y - 0.5)입니다. `patrol`의 기본 목표 `(4.0, 1.0)`은 Gazebo 기준 (2.0, 0.5)로, 시작 위치 반대편의 빈 곳을 노린 값입니다. 하지만 지도를 만든 위치나 방향이 다르면 이 값은 벽 속일 수 있으므로, 반드시 직접 확인합니다.
+**좌표 정하기**: 9장의 slam_toolbox 지도는 SLAM을 켠 순간의 로봇 위치가 아니라 `odom` 원점, 곧 Gazebo가 로봇을 생성한 위치를 `map` 원점으로 씁니다(9장 실습 9-4). TurtleBot3 world 시뮬은 로봇을 Gazebo 좌표 (-2.0, -0.5)에 놓으므로(`turtlebot3_world.launch.py`의 `x_pose`, `y_pose` 기본값), 지도 좌표 (x, y)는 Gazebo 좌표 (x - 2.0, y - 0.5)입니다. `patrol`의 기본 목표 `(4.0, 1.0)`은 Gazebo 기준 (2.0, 0.5)로, 시작 위치 반대편의 빈 곳을 노린 값입니다. 하지만 로봇을 다른 위치나 방향으로 생성해 지도를 만들었다면 이 값은 벽 속일 수 있으므로, 반드시 직접 확인합니다.
 
 rviz2 툴바의 **Publish Point**를 누르고 가고 싶은 곳을 클릭하면, 그 좌표가 `/clicked_point`로 발행됩니다.
 
@@ -775,7 +775,7 @@ planner_server가 경로를 찾지 못해 실패를 알리고, bt_navigator는 �
 - 원서 PDF p.171~176의 amcl 설명(파티클 필터, 초기 위치, 수렴)은 Nav2 amcl에도 그대로 적용됩니다. 파라미터 이름은 일부 바뀌었으니 `waffle_pi.yaml`의 `amcl:` 부분을 직접 읽어 보세요 (`min_particles`, `max_particles`, `laser_model_type`, `set_initial_pose` 등).
 - 원서 PDF p.176~181의 move_base 구조(global/local planner, costmap, recovery)는 Nav2의 planner_server, controller_server, costmap, behavior_server로 나뉘었습니다. 원서의 costmap 설정 파일 여러 개는 `waffle_pi.yaml` 한 파일의 `global_costmap:`, `local_costmap:` 부분이 대신합니다.
 - 원서 PDF p.181~183의 순찰 코드는 `move_base` 액션과 상태 기계(smach)를 썼습니다. 이 가이드는 5장의 rclpy ActionClient로 같은 목적을 이룹니다. 원서 코드와 줄 단위로 대응시키지는 않았습니다.
-- 원서는 지도의 좌표를 그대로 목표로 썼지만, ROS 2 시뮬에서 직접 만든 지도는 원점이 로봇 시작 위치이므로 좌표를 `/clicked_point`로 확인하는 단계를 추가했습니다.
+- 원서는 지도의 좌표를 그대로 목표로 썼지만, ROS 2 시뮬에서 직접 만든 지도는 원점이 로봇을 생성한 위치(`odom` 원점)이므로 좌표를 `/clicked_point`로 확인하는 단계를 추가했습니다.
 - TurtleBot3의 `waffle_pi.yaml`에는 `route_server:`, `smoother_server:` 부분이 없지만 `nav2_bringup/launch/navigation_launch.py`는 두 노드를 lifecycle 관리 대상으로 띄웁니다. 이 노드들은 파라미터 기본값으로 시작할 것으로 보이나 이 문서에서는 확인하지 못했습니다. 실습 10-2에서 lifecycle manager가 "Managed nodes are active"까지 가지 못하고 멈추면 터미널 2의 로그에서 이 두 노드 이름을 찾아보세요.
 
 ## 7. 이 문서의 검증 상태

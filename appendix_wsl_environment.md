@@ -71,10 +71,8 @@ ros2 daemon start > /dev/null 2>&1
 
 ### 2장 실습에서의 주의점
 
-2장 실습 2-2와 "일부러 망가뜨려 보기"에 있던 이 PC 전용 설명을 옮겨 왔습니다.
+2장 실습 2-2와 "일부러 망가뜨려 보기"에 있던 이 PC 전용 설명을 옮겨 왔습니다. 멈추는 이유와 기본 대처법은 위의 daemon 절과 같습니다.
 
-- 이 WSL은 `127.0.0.1`의 닫힌 포트로 연결을 시도하면 바로 거부되지 않고 시간이 다 될 때까지 기다립니다. `ros2` CLI는 daemon이 떠 있는지 확인하려고 그 포트에 연결해 보므로, 그 도메인에 daemon이 없으면 `ros2 node list`, `ros2 topic list`, `ros2 doctor` 같은 명령이 약 2분 17초 동안 멈췄다가 Python Traceback을 내고 끝납니다. 이럴 때는 Ctrl-C로 멈추고 `ros2 daemon start`를 먼저 실행합니다. `ros2 daemon start`는 daemon이 없어도 1초 안에 끝납니다.
-- `ros2 daemon stop`을 쓴 뒤에는 바로 `ros2 daemon start`를 붙여서, daemon이 없는 상태로 두지 않습니다.
 - 실습 2-2의 `ROS_DOMAIN_ID=5 ros2 node list`도 도메인 5용 daemon이 따로 필요하므로, 멈추면 `ROS_DOMAIN_ID=5 ros2 node list --no-daemon`으로 실행합니다.
 - `ros2 daemon stop` 뒤에 `ros2 daemon start` 없이 `ros2 node list`를 실행하면, 이 PC에서는 약 2분 동안 출력 없이 멈췄다가 Traceback을 내고 끝납니다. 그동안에도 노드끼리는 계속 통신합니다. Ctrl-C로 끊고 `ros2 daemon start`를 실행한 뒤 다시 `ros2 node list`를 입력합니다.
 

@@ -157,7 +157,7 @@ from basics_interfaces.msg import Complex
 |---|---|---|
 | `rospy.init_node()` 후 전역 함수 호출 | `Node`를 상속한 클래스, `rclpy.init()`, `rclpy.spin(node)` | 한 프로세스에 노드를 여럿 둘 수 있게 노드가 객체가 되었습니다. |
 | `rospy.Publisher('counter', Int32, queue_size=...)` | `self.create_publisher(Int32, 'counter', 10)` | 인자 순서가 타입, 이름, QoS입니다. QoS는 생략할 수 없습니다. |
-| `rospy.Subscriber('counter', Int32, callback)` | `self.create_subscription(Int32, 'counter', self.callback, 10)` | 반환값을 변수에 붙잡아 둬야 구독이 유지됩니다. |
+| `rospy.Subscriber('counter', Int32, callback)` | `self.create_subscription(Int32, 'counter', self.callback, 10)` | rclpy 노드는 만든 구독을 안에 보관하므로, 반환값을 저장하지 않아도 구독이 유지됩니다(Q1). 이 가이드는 나중에 다시 쓸 수 있도록 `self.`에 저장합니다. |
 | `rospy.Rate(2)`와 `while not rospy.is_shutdown()` | `self.create_timer(0.5, self.timer_callback)` | 반복문 대신 타이머 콜백을 씁니다. |
 | `rospy.loginfo()` | `self.get_logger().info()` | |
 | `latch=True` | `QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)` | 받는 쪽도 TRANSIENT_LOCAL로 요청해야 지난 메시지를 받습니다. |
@@ -224,7 +224,7 @@ if __name__ == '__main__':
 | 9 | 부모 생성자에 노드 이름을 넘깁니다. 그래프에는 `/topic_publisher`로 나타납니다. |
 | 10 | `counter` 토픽에 `Int32`를 발행하는 publisher를 만듭니다. `10`은 QoS로, KEEP_LAST depth 10과 기본값 RELIABLE, VOLATILE을 뜻합니다. |
 | 11 | 다음에 보낼 숫자입니다. |
-| 12 | 0.5초마다 `timer_callback`을 부르는 타이머를 만듭니다. 즉 2 Hz로 발행합니다. 반환값을 `self.timer`에 붙잡아 둬야 타이머가 사라지지 않습니다. |
+| 12 | 0.5초마다 `timer_callback`을 부르는 타이머를 만듭니다. 즉 2 Hz로 발행합니다. 반환값은 `self.timer`에 저장합니다. rclpy에서는 저장하지 않아도 노드가 타이머를 보관해서 동작하지만(Q1), 나중에 타이머를 멈추거나 지우려면 이 변수가 필요합니다. |
 | 14~18 | 타이머가 부를 때마다 새 메시지를 만들어 숫자를 넣고, 발행한 뒤 숫자를 1 늘립니다. |
 | 21~22 | `rclpy.init`은 ROS 2 통신을 준비합니다. `args`를 넘기면 `--ros-args` 뒤의 리매핑 같은 인자가 적용됩니다. |
 | 23 | 노드 객체를 만듭니다. 이 순간 publisher와 타이머가 생깁니다. |
@@ -901,7 +901,7 @@ ros2 topic pub -t 3 /number std_msgs/msg/Int32 "{data: 21}"
 ros2 node info /doubler
 ```
 
-**관찰**: 터미널 B에 `data: 42`가 찍힙니다. `-t 3`은 3번 발행하고 끝내라는 뜻인데, 맨 처음 것은 연결이 맺어지기 전에 나가서 빠질 수 있습니다. `node info`에는 `Subscribers:`에 `/number: std_msgs/msg/Int32`, `Publishers:`에 `/doubled: std_msgs/msg/Int32`가 보입니다.
+**관찰**: 터미널 B에 `data: 42`가 세 번 찍힙니다. `-t 3`은 3번 발행하고 끝내라는 뜻입니다. `-t`나 `--once`를 주면 `ros2 topic pub`은 `Waiting for at least 1 matching subscription(s)...`를 출력하고 구독자가 하나 이상 연결될 때까지 기다렸다가 발행하므로, 첫 메시지도 빠지지 않습니다. `node info`에는 `Subscribers:`에 `/number: std_msgs/msg/Int32`, `Publishers:`에 `/doubled: std_msgs/msg/Int32`가 보입니다.
 
 이번에는 코드를 고치지 않고 실습 3-1의 publisher에 연결합니다. 터미널 A의 doubler를 끄고 다음처럼 띄운 뒤, 터미널 C에서 `ros2 run basics topic_publisher`를 실행합니다.
 
@@ -919,17 +919,19 @@ ros2 run basics doubler --ros-args -r number:=counter
 |---|---|---|
 | `topic_publisher`가 도는 중에 `ros2 topic pub -r 1 /counter std_msgs/msg/String "{data: hi}"` (타입 불일치) | `topic_subscriber`는 오류 없이 정수만 계속 받습니다. 문자열 메시지는 조용히 무시됩니다. | `ros2 topic list -t`가 `/counter [std_msgs/msg/Int32, std_msgs/msg/String]`을 보여 줍니다. `ros2 topic info /counter`의 Type에도 두 타입이 나오고 Publisher count가 2입니다. |
 | `ros2 run basics topic_subscriber --ros-args -r counter:=countr` (이름 오타) | 아무것도 받지 못하고, 오류도 없습니다. | `ros2 topic info /countr`: Publisher count 0, Subscription count 1 |
-| publisher를 Ctrl-C로 종료 | subscriber는 종료되지 않고 기다립니다. publisher를 다시 띄우면 0부터 다시 받습니다. | `ros2 node list` |
+| publisher를 Ctrl-C로 종료 | subscriber는 종료되지 않고 기다립니다. publisher를 다시 띄우면 0부터 다시 받습니다(미검증). | `ros2 node list` |
 | `ros2 topic pub -r 2 /counter std_msgs/msg/Int32 "{data: 7}" --qos-reliability best_effort` (QoS 불일치) | `topic_subscriber`에 `offering incompatible QoS ... Last incompatible policy: RELIABILITY` 경고가 나오고 7을 받지 못합니다. | `ros2 topic info -v /counter`로 양쪽 Reliability를 비교합니다. |
 | `ros2 run basics topic_publisher --ros-args -p use_sim_time:=true` (시뮬레이션 시계 없이 시뮬레이션 시간 사용) | `/counter`에 아무것도 발행되지 않습니다. 시뮬레이션 시간이 0에서 멈춰 있어서 타이머가 만료되지 않습니다. | `ros2 param get /topic_publisher use_sim_time`이 `Boolean value is: True`. `ros2 topic info /clock`: Publisher count 0, Subscription count 1. 반대로 Gazebo 같은 시뮬레이터를 쓰면서 이 값을 빼먹으면 시각이 맞지 않는 문제가 생기며, 시뮬레이션 장에서 다룹니다. |
 | `ros2 topic pub --once /counter std_msgs/msg/Int32 "{data: 2147483648}"` (범위 초과) | 오류 없이 `-2147483648`로 바뀌어 전달됩니다. | `ROS_PYTHON_CHECK_FIELDS=1`로 같은 값을 Python에서 대입해 보면 `AssertionError`가 납니다. |
-| `basics_interfaces/package.xml`에서 `<member_of_group>` 줄을 지우고 빌드 | 빌드가 실패합니다. | `colcon build` 출력의 CMake 오류 메시지를 읽습니다. |
+| `basics_interfaces/package.xml`에서 `<member_of_group>` 줄을 지우고 빌드 | 빌드가 실패합니다. (미검증) | `colcon build` 출력의 CMake 오류 메시지를 읽습니다. |
 
 ## 5. 확인 질문
 
-<details><summary>Q1. 타이머를 self.timer에 붙잡아 두지 않으면 어떻게 되나요?</summary>
+<details><summary>Q1. 타이머를 self.timer에 저장하지 않으면 어떻게 되나요?</summary>
 
-`create_timer`가 돌려준 타이머 객체를 아무도 참조하지 않으면 Python이 그 객체를 정리할 수 있고, 그러면 타이머가 동작하지 않거나 예상과 다르게 동작할 수 있습니다. publisher, subscriber, 타이머는 모두 `self.`에 붙잡아 두는 것이 안전한 습관입니다. 이 동작은 이 가이드에서 따로 실험하지 않았습니다.
+rclpy에서는 그래도 타이머가 동작합니다. `Node`는 `create_timer`, `create_subscription`으로 만든 객체를 자기 안의 목록에 보관하므로, 반환값을 아무 변수에도 저장하지 않아도 Python이 그 객체를 정리하지 않습니다. 이 가이드의 검증 스크립트 `checks/rclpy_unstored_refs.sh`로 확인한 결과, 반환값을 저장하지 않은 타이머와 구독이 `gc.collect()`를 부른 뒤에도 계속 동작했습니다.
+
+그래도 `self.timer`처럼 저장하는 습관을 권합니다. 타이머를 멈추거나(`cancel()`) 지울 때(`destroy_timer()`) 그 객체가 필요하기 때문입니다. 또 23장의 C++(rclcpp)는 다르게 동작합니다. rclcpp 노드는 타이머를 약한 참조로만 들고 있어서, 지역 변수에만 담은 타이머는 생성자가 끝날 때 사라지고 한 번도 불리지 않습니다.
 
 </details>
 
@@ -994,7 +996,10 @@ subscriber도 BEST_EFFORT로 요청해야 합니다. RELIABLE로 요청하면 pu
   - 일부러 망가뜨리기 표 중 타입 불일치, 이름 오타, publisher 종료 후 subscriber 생존, QoS 불일치, `use_sim_time:=true` 시 발행 없음과 `/clock` 상태, 범위 초과.
 - 확인 못 함:
   - `<member_of_group>` 줄을 지웠을 때의 빌드 실패와 그 오류 문구.
-  - Q1의 타이머 객체를 붙잡지 않았을 때의 동작.
   - publisher를 다시 켰을 때 0부터 다시 받는 것은 코드에 근거한 설명이며 따로 실행해 보지 않았습니다.
   - 학습자의 `~/rosbook_ws`에서 장 순서대로 한 단계씩 빌드하는 과정 (검증은 최종 형태의 패키지로 했습니다). 기본 도메인 0에서의 실행.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 결함 수정(2026-10-31): 저장소의 `checks/` 스크립트로 두 가지를 확인하고 고쳤습니다.
+  - 2절 표와 실습 3-1 해설, Q1: rclpy에서는 반환값을 저장하지 않아도 타이머와 구독이 유지됩니다. `checks/rclpy_unstored_refs.sh`에서 반환값을 저장하지 않은 0.1초 주기 타이머와 구독을 `gc.collect()`를 계속 부르며 2초 동안 돌리자 타이머는 20번 불렸고 구독은 19~20개를 받았으며(두 번 실행), 노드의 내부 목록에 `timers=1 subscriptions=1`이 남아 있었습니다. 근거 코드는 rclpy `node.py`의 `create_subscription`, `create_timer`가 `self._subscriptions`, `self._timers`에 객체를 추가하는 부분입니다. rclcpp와의 차이는 `checks/rclcpp_local_timer.sh`로 확인했습니다(23장).
+  - 실습 3-7의 관찰: `ros2 topic pub -t 3`은 구독자가 연결될 때까지 기다렸다가 발행합니다. `checks/topic_pub_waits.sh`에서 구독자가 없으면 `Waiting for at least 1 matching subscription(s)...`만 출력한 채 5초 안에 끝나지 않았고, echo 구독자가 있으면 3번의 시도 모두 세 메시지가 도착했습니다. 근거 코드는 `ros2topic/verb/pub.py`에서 `-t`나 `--once`를 주면 `--wait-matching-subscriptions`의 기본값이 1이 되는 부분입니다.
+- 미검증 표시(2026-10-31): 4절의 publisher 종료 행 가운데 다시 띄우면 0부터 받는다는 부분과 `<member_of_group>` 삭제 행에 (미검증)을 붙였습니다.

@@ -175,7 +175,7 @@ turtlebot3_gazebo/
 | 원서의 TurtleBot 시뮬은 Kinect 기반 가짜 레이저 | TurtleBot3 Waffle Pi의 360도 LiDAR(`hls_lfcd_lds`) | 각도 범위와 인덱스 의미가 달라집니다. 7장에서 다시 다룹니다. |
 | `cmd_vel`은 `geometry_msgs/Twist` (PDF p.100) | TurtleBot3 Jazzy 시뮬은 `geometry_msgs/msg/TwistStamped` | 브리지 yaml에 TwistStamped로 적혀 있습니다. Twist를 보내면 아무 일도 일어나지 않습니다. |
 | `/use_sim_time`은 파라미터 서버의 전역 값 | 노드마다 `use_sim_time` 파라미터 | 노드 하나라도 빠뜨리면 그 노드만 벽시계를 씁니다. |
-| `roscore`가 이름을 중개 | 중개자 없이 DDS 탐색 | 이 가이드의 WSL 환경은 `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`를 씁니다(README 참고). |
+| `roscore`가 이름을 중개 | 중개자 없이 DDS 탐색 | 이 가이드의 WSL 환경은 `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`를 씁니다([부록](appendix_wsl_environment.md) 참고). |
 | Stage 시뮬레이터 (PDF p.113~114) | 이 가이드는 다루지 않음 | Jazzy용 Stage 바이너리가 없고, Gazebo만으로 이후 장을 모두 진행합니다. |
 
 ## 3. 실습

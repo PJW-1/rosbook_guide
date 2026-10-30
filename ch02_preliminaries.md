@@ -268,7 +268,7 @@ rqt_graph
 
 **관찰**: 창이 하나 뜨고 `/talker` → `/chatter` → `/listener` 모양의 그림이 보입니다. 처음 띄우면 위쪽 드롭다운이 "Nodes only"라서 토픽 상자 없이 노드만 보일 수 있습니다. 그때는 드롭다운을 "Nodes/Topics (all)"로 바꿉니다. 왼쪽 위 새로고침 버튼을 누르면 현재 그래프로 다시 그립니다. 터미널 A에서 talker를 Ctrl-C로 끄고 새로고침해 보고, 다시 띄우고 새로고침해 봅니다.
 
-모든 노드가 자동으로 만드는 `/rosout`(로그)과 `/parameter_events`(파라미터 변경 알림)는 기본 설정에서는 그림에 나오지 않습니다. "Hide:"라는 글자 뒤에 있는 체크 상자들이 처음에 켜져 있어서, 이런 토픽을 숨기기 때문입니다. "Debug"는 `/rosout` 같은 디버깅용 이름을, "Params"는 `/parameter_events`를, "Dead sinks"는 구독자가 없는 토픽을, "Leaf topics"는 연결이 하나뿐인 토픽을 숨깁니다. 드롭다운이 "Nodes/Topics (all)"인 상태에서 이 네 개의 체크를 모두 끄면 `/rosout`과 `/parameter_events`가 보입니다. 확인했으면 네 개를 다시 켜 둡니다. rqt는 체크 상태를 기억했다가 다음에 띄울 때 그대로 씁니다.
+모든 노드가 자동으로 만드는 `/rosout`(로그)과 `/parameter_events`(파라미터 변경 알림)는 기본 설정에서는 그림에 나오지 않습니다. "Hide:"라는 글자 뒤에 있는 체크 상자 가운데 여러 개가 처음부터 켜져 있어서, 이런 토픽을 숨기기 때문입니다. "Debug"는 `/rosout` 같은 디버깅용 이름을, "Params"는 `/parameter_events`를, "Dead sinks"는 구독자가 없는 토픽을, "Leaf topics"는 연결이 하나뿐인 토픽을 숨깁니다. 드롭다운이 "Nodes/Topics (all)"인 상태에서 이 네 개의 체크를 모두 끄면 `/rosout`과 `/parameter_events`가 보입니다. 확인했으면 네 개를 다시 켜 둡니다. rqt는 체크 상태를 기억했다가 다음에 띄울 때 그대로 씁니다.
 
 창을 닫은 뒤 같은 정보를 글자로 봅니다.
 

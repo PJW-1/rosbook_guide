@@ -60,7 +60,7 @@ printenv | grep -i ros
 | `ROS_DISTRO` | `jazzy` | 배포판 이름입니다. |
 | `ROS_PYTHON_VERSION` | `3` | Python 3을 씁니다. |
 | `AMENT_PREFIX_PATH` | `/home/<사용자>/rosbook_ws/install/...:/opt/ros/jazzy` 형태 | ROS 2가 패키지를 찾는 경로 목록입니다. 2장에서 자세히 봅니다. |
-| `RMW_IMPLEMENTATION` | `rmw_cyclonedds_cpp` | 통신 계층으로 Cyclone DDS를 씁니다. 이 환경에서 이 값을 쓰는 이유는 README에 있습니다. |
+| `RMW_IMPLEMENTATION` | `rmw_cyclonedds_cpp` | 통신 계층으로 Cyclone DDS를 씁니다. 이 환경에서 이 값을 쓰는 이유는 [부록](appendix_wsl_environment.md)에 있습니다. |
 | `ROS_DOMAIN_ID` | 없을 수 있음 | 없으면 기본값 0을 씁니다. |
 
 이어서 설치 상태를 점검합니다.
@@ -71,7 +71,7 @@ ros2 doctor
 
 **관찰**: 마지막 줄에 `All 5 checks passed`처럼 모든 점검이 통과했다는 문장이 나오면 됩니다. 그 위에 `UserWarning: ... has been updated to a new version` 같은 경고가 여러 줄 나올 수 있습니다. 인터넷의 최신 패키지 버전과 비교한 결과일 뿐이라서 실습에는 영향이 없습니다.
 
-`ros2 doctor`가 출력 없이 1분 넘게 멈춰 있으면 Ctrl-C로 멈추고 `ros2 daemon start`를 실행한 뒤 다시 시도합니다. daemon이 무엇인지와 이 PC에서 멈추는 이유는 2장 실습 2-2에서 다룹니다.
+`ros2 doctor`가 출력 없이 1분 넘게 멈춰 있으면 Ctrl-C로 멈추고 `ros2 daemon start`를 실행한 뒤 다시 시도합니다. daemon이 무엇인지는 2장에서, 이 PC에서 멈추는 이유는 [부록](appendix_wsl_environment.md)에서 다룹니다.
 
 **생각해 볼 질문**: `ROS_DISTRO`가 비어 있다면 무엇이 빠진 것일까요?
 
@@ -173,7 +173,7 @@ ros2 interface show std_msgs/msg/String
 | 바꿀 것 | 예상 증상 | 원인을 확인하는 명령 |
 |---|---|---|
 | talker를 Ctrl-C로 종료 | listener는 오류 없이 계속 실행되지만 새 메시지를 받지 못합니다. | `ros2 node list` (talker가 사라짐), `ros2 topic info /chatter` (Publisher count: 0) |
-| listener를 `ROS_DOMAIN_ID=5 ros2 run demo_nodes_py listener` 로 실행 | talker가 돌고 있어도 아무것도 받지 못합니다. | 기본 도메인에서 `ros2 node list` 를 실행하면 listener가 보이지 않습니다. `ROS_DOMAIN_ID=5 ros2 node list` 에서는 보입니다. |
+| listener를 `ROS_DOMAIN_ID=5 ros2 run demo_nodes_py listener` 로 실행 | talker가 돌고 있어도 아무것도 받지 못합니다. | 기본 도메인에서 `ros2 node list` 를 실행하면 listener가 보이지 않습니다. `ROS_DOMAIN_ID=5 ros2 node list --no-daemon` 에서는 보입니다. `--no-daemon`을 빼면 이 PC에서는 도메인 5용 daemon이 없어서 명령이 멈춥니다(2장 실습 2-2). |
 | `ros2 run demo_nodes_py talkr` 처럼 실행 파일 이름 오타 | `No executable found` 오류 | `ros2 pkg executables demo_nodes_py` 로 실제 이름을 확인합니다. |
 
 ## 5. 확인 질문
@@ -223,3 +223,4 @@ listener는 종료되지 않고 그대로 기다립니다. 노드는 상대 노�
 - 확인 못 함:
   - `ROS_DOMAIN_ID`를 설정하지 않은 기본 도메인 0에서의 실행. 검증은 다른 작업과 섞이지 않도록 도메인 21에서 했습니다.
   - 학습자의 `~/.bashrc`에 `RMW_IMPLEMENTATION`이 실제로 추가되었는지. 이 문서는 추가되어 있다고 전제합니다.
+- 결함 수정(2026-10-31): 4절 도메인 행의 `ROS_DOMAIN_ID=5 ros2 node list`에 `--no-daemon`을 붙였습니다. 이 PC에서는 그 도메인용 daemon이 없으면 이 명령이 멈추기 때문입니다. 근거는 `checks/domain_no_daemon.sh`의 실행 결과입니다. `--no-daemon`을 붙이면 1초 만에 `/listener`가 보였고, 붙이지 않으면 20초 안에 끝나지 않았습니다. README에 있던 환경 설명을 `appendix_wsl_environment.md`로 옮기면서 이 장의 참조도 부록으로 바꿨습니다.

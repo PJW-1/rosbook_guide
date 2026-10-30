@@ -152,7 +152,7 @@ def generate_test_description():
 
 | 원서 (ROS 1) | ROS 2 Jazzy | 이유와 주의점 |
 |---|---|---|
-| `roscore` (master, 파라미터 서버, rosout 노드) | 없음. 필요하면 `ros2 daemon start` | 노드는 DDS discovery로 서로를 찾습니다. daemon은 명령줄 도구의 속도를 위한 캐시일 뿐입니다. 이 가이드의 환경에서는 daemon이 없을 때 명령이 멈출 수 있으므로 README의 안내대로 daemon을 미리 띄우고, `ros2 daemon stop` 을 했다면 바로 `ros2 daemon start` 를 합니다. |
+| `roscore` (master, 파라미터 서버, rosout 노드) | 없음. 필요하면 `ros2 daemon start` | 노드는 DDS discovery로 서로를 찾습니다. daemon은 명령줄 도구의 속도를 위한 캐시일 뿐입니다. 이 가이드의 환경에서는 daemon이 없을 때 명령이 멈출 수 있으므로 README와 [부록](appendix_wsl_environment.md)의 안내대로 daemon을 미리 띄우고, `ros2 daemon stop` 을 했다면 바로 `ros2 daemon start` 를 합니다. |
 | `rosnode cleanup` (죽은 노드 등록 정리) | 해당 명령 없음 | 등록 표가 없으므로 정리할 것도 없습니다. 죽은 노드는 discovery 정보가 만료되면 목록에서 사라집니다. |
 | `rosparam set/get/delete/dump/load` (전역 파라미터 서버) | `ros2 param set/get/delete/dump/load/list/describe <노드>` | 모든 명령에 대상 노드 이름이 붙습니다. 노드가 선언하지 않은 파라미터는 기본적으로 읽을 수도 쓸 수도 없습니다. |
 | 슬래시로 구분한 이름 `my_dict/message` | 점으로 구분한 이름 `my_dict.message` | YAML의 중첩 구조가 점 구분 이름으로 펼쳐집니다. |
@@ -282,6 +282,8 @@ ros2 param get /parameter_blackboard my_dict.message
 **생각해 볼 질문**: 원서는 파라미터를 설정용으로만 쓰고 데이터를 주고받는 데 쓰지 말라고 합니다 (원서 PDF p.381). ROS 2에서 파라미터를 바꾸는 일이 실제로는 어떤 통신(토픽, 서비스, 액션 중 무엇)으로 이루어지는지 `ros2 node info /parameter_blackboard` 로 확인해 보세요.
 
 ### 실습 20-3. 패키지 위치 찾기와 실행 파일 실행
+
+> **미검증 실습**: 문서를 쓸 때 이 실습 가운데 `colcon_cd basics`로 소스 폴더에 이동하는 부분을 실제로 실행해 확인하지 못했습니다. `colcon_cd` 함수 파일이 있는 것과 `ros2 pkg prefix` 출력만 확인했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 하나
 
@@ -725,9 +727,9 @@ ros2 service list -t
 |---|---|---|
 | `ros2 run basics topic_publisher --ros-args -p my_param:=4.2` 로 실행한 뒤 값을 확인 | `ros2 param get /topic_publisher my_param` 이 `Parameter not set`, `ros2 param set ... my_param 1.0` 은 `Setting parameter failed: Invalid access to undeclared parameter(s)` 로 실패합니다. 노드 터미널에도 `Failed to get parameters` 경고가 남습니다. | `ros2 param list /topic_publisher` 로 선언된 이름 확인 |
 | `parameter_blackboard` 에서 double로 넣은 `my_param` 에 `hello` 를 다시 set | 이 노드는 타입이 바뀌는 것을 허용해서 `Set parameter successful` 후 `String value is: hello` 가 됩니다. 19장의 `speaker` 노드처럼 타입을 정해 선언한 노드는 같은 일을 거부합니다. | `ros2 param describe /parameter_blackboard my_param` |
-| `setup.py` 의 `data_files` 에서 launch 줄을 빼고 빌드 | `ros2 launch basics counter.launch.py` 가 파일을 찾지 못한다는 오류로 끝납니다. | `ls $(ros2 pkg prefix --share basics)/launch` |
+| `setup.py` 의 `data_files` 에서 launch 줄을 빼고, `rm -rf ~/rosbook_ws/build/basics ~/rosbook_ws/install/basics` 로 이전 빌드 결과를 지운 뒤 다시 빌드 | `ros2 launch basics counter.launch.py` 가 `file 'counter.launch.py' was not found in the share directory of package 'basics'` 오류로 끝납니다. 지우지 않고 다시 빌드만 하면 `--symlink-install` 이 전에 만든 링크가 `install/` 에 남아 있어서 launch가 그대로 실행됩니다. 확인한 뒤에는 줄을 되살리고 다시 빌드합니다. | `ls $(ros2 pkg prefix --share basics)/launch` |
 | launch 파일 실행 중 터미널 2에서 `ros2 topic list` 했는데 `/launch_counter` 대신 `/counter` 가 보임 | `topic:=launch_counter` 를 빠뜨렸거나 `:=` 대신 `=` 를 썼습니다. | `ros2 launch basics counter.launch.py --show-args` |
-| 실습 20-7의 테스트 파일에서 토픽 이름을 `countr` 로 오타 | `test_counter_increases` 가 10초 뒤 `no counter messages within 10 s` 로 실패합니다. | `colcon test-result --verbose` |
+| 실습 20-7의 테스트 파일에서 토픽 이름을 `countr` 로 오타 | `test_counter_increases` 가 10초 뒤 `no counter messages within 10 s` 로 실패합니다. (미검증) | `colcon test-result --verbose` |
 | `setup.py` 에서 `import os` 를 `from glob import glob` 보다 위로 | `colcon test` 에서 flake8 테스트가 import 순서 오류(I100)로 실패합니다. 빌드와 실행은 잘 됩니다. | `colcon test-result --verbose` |
 | `ros2 daemon stop` 만 하고 start를 잊음 | 이 가이드의 환경에서는 다음 `ros2 node list` 등이 출력 없이 멈출 수 있습니다. | Ctrl+C로 멈춘 뒤 `ros2 daemon start` 하고 다시 시도 |
 
@@ -804,8 +806,10 @@ ros2 service list -t
   - `ros2 node` 하위 명령이 `info`, `list` 뿐인 것, `ros2 param` 하위 명령 목록, `ros2 launch` 의 `--show-args`/`--print`/`--debug`/`--launch-prefix`, `ros2 run --prefix`.
 - 확인 못 함:
   - `colcon_cd basics` 를 실제로 실행해 이동하는 것(함수 파일만 확인했습니다).
-  - daemon을 껐다 켠 직후 `ros2 node list` 가 비어 있다가 채워지는 시간. 검증 환경에서는 `ros2 daemon stop` 자체가 20초 시간 제한에 걸린 적이 있었습니다. README에 적은 측정에서 daemon이 이미 꺼져 있을 때는 `ros2 daemon stop`도 약 2분 17초 멈췄으므로, 이 경우였을 가능성이 큽니다.
+  - daemon을 껐다 켠 직후 `ros2 node list` 가 비어 있다가 채워지는 시간. 검증 환경에서는 `ros2 daemon stop` 자체가 20초 시간 제한에 걸린 적이 있었습니다. 부록(`appendix_wsl_environment.md`)에 적은 측정에서 daemon이 이미 꺼져 있을 때는 `ros2 daemon stop`도 약 2분 17초 멈췄으므로, 이 경우였을 가능성이 큽니다.
   - Ctrl+C로 launch를 멈출 때의 `KeyboardInterrupt` 트레이스백이 생기는 정확한 원인. 검증에서는 launch 프로세스에 SIGINT를 보내 재현했고, 학습자의 터미널 Ctrl+C와 완전히 같은 조건은 아닙니다.
-  - `launch_arguments` 를 지웠을 때(Q6), `data_files` 를 뺐을 때, 테스트 토픽 오타의 실제 출력 문구.
-  - Fast DDS에서의 동작. 이 가이드는 README의 안내대로 Cyclone DDS를 전제로 합니다.
+  - `launch_arguments` 를 지웠을 때(Q6)와 테스트 토픽 오타의 실제 출력 문구. `data_files` 를 뺐을 때의 문구는 아래 결함 수정 항목처럼 다른 launch 파일로 확인했습니다.
+  - Fast DDS에서의 동작. 이 가이드는 부록의 안내대로 Cyclone DDS를 전제로 합니다.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 결함 수정(2026-10-31): 4절의 `data_files` 행을 고쳤습니다. 처음 행은 launch 줄을 빼고 다시 빌드하면 바로 오류가 난다고 적었지만, `--symlink-install` 로 이미 빌드한 워크스페이스에서는 전에 만든 링크가 `install/` 에 남아 launch가 그대로 실행됩니다. `checks/stale_launch_install.sh` 에서 `talker_listener.launch.py` 하나만 든 검증용 `basics` 패키지로 확인했습니다. 줄을 지우고 같은 워크스페이스에서 다시 빌드하면 `install/basics/share/basics/launch/` 에 `build/` 쪽을 가리키는 링크가 남아 launch가 성공했고, `build/basics` 와 `install/basics` 를 지운 뒤 다시 빌드하면 `file 'talker_listener.launch.py' was not found in the share directory of package 'basics' which is at '.../install/basics/share/basics'` 로 실패했습니다. 이 장의 `counter.launch.py` 로 직접 실행한 것은 아니므로, 행의 오류 문구는 파일 이름만 바꿔 적었습니다.
+- 미검증 표시(2026-10-31): 실습 20-3에 `colcon_cd` 부분을 확인하지 못했다는 미검증 실습 표시를 붙였고, 4절의 테스트 토픽 오타 행에 (미검증)을 붙였습니다.

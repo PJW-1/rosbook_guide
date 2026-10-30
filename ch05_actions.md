@@ -469,6 +469,8 @@ goal마다 고유 ID(UUID)가 붙는다는 점, 그리고 마지막 줄에 상�
 
 ### 실습 5-3. 액션의 속을 들여다보기: 숨겨진 서비스와 토픽
 
+> **미검증 실습**: 문서를 쓸 때 이 실습 가운데 `rqt_graph`로 액션 토픽을 보는 부분(GUI)을 실제로 실행해 확인하지 못했습니다. 나머지 명령의 출력은 확인했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 1에서 `simple_action_server`가 실행 중입니다.
 
 **직접 입력** (터미널 2):
@@ -820,7 +822,7 @@ ros2 topic echo --once /timer/_action/status action_msgs/msg/GoalStatusArray
 | 서버를 `--ros-args -p use_sim_time:=true`로 실행 (시뮬레이션 시계를 내보내는 `/clock` 없이) | `ros2 run basics fancy_action_client 3`으로 3초짜리 goal을 보내면 feedback이 `경과 0.00초, 남음 3.00초`로 계속 반복되고 goal이 끝나지 않습니다. `self.get_clock().now()`가 `/clock`을 받기 전까지 0에 멈춰 있기 때문입니다. | `ros2 topic list`에 `/clock`이 없는 것을 확인합니다. 반대로 Gazebo 같은 시뮬레이터와 함께 쓰는 노드에서 `use_sim_time`을 빠뜨리면 시뮬레이터 시간과 노드 시간이 어긋납니다. |
 | goal 실행 중 서버를 Ctrl+C로 종료 | 검증 환경에서는 서버 터미널에 `feedback publisher is invalid`가 들어 있는 `RCLError` traceback과 `Goal state not set, assuming aborted` 경고가 찍혔습니다. | 클라이언트는 결과를 받지 못하고 기다리게 됩니다. 실제 로봇에서는 서버가 죽었을 때를 대비해 클라이언트에 timeout을 둡니다. |
 | `fancy_action_server.py`에서 반복문 뒤의 취소 확인(53~56줄)을 지우고 `fancy_action_client 3 2.5` 실행 | `취소를 요청합니다`가 찍히고 서버도 `취소 요청 받음`을 남기지만, 결과 상태는 `SUCCEEDED`입니다. 취소는 수락되었어도 서버가 마지막에 `succeed()`를 불렀기 때문입니다. | 서버 로그에 `취소 완료` 대신 `성공`이 찍히는지 봅니다. |
-| `execute`에서 `goal_handle.succeed()` 줄 삭제 | rclpy가 경고를 남기고 상태를 ABORTED로 처리합니다. 위 Ctrl+C 실험에서 본 `Goal state not set, assuming aborted`와 같은 경고입니다. | 서버 로그와 클라이언트의 `[result] 상태:` 줄 |
+| `execute`에서 `goal_handle.succeed()` 줄 삭제 | rclpy가 경고를 남기고 상태를 ABORTED로 처리합니다. 위 Ctrl+C 실험에서 본 `Goal state not set, assuming aborted`와 같은 경고입니다. (미검증) | 서버 로그와 클라이언트의 `[result] 상태:` 줄 |
 
 QoS 불일치는 이 장의 코드로는 만들기 어렵습니다. 액션의 숨겨진 토픽 QoS는 rclpy가 정하고, 서버와 클라이언트가 같은 기본값을 쓰기 때문입니다. 토픽 QoS 불일치는 3장을 참고합니다.
 
@@ -834,7 +836,7 @@ QoS 불일치는 이 장의 코드로는 만들기 어렵습니다. 액션의 �
 
 <details><summary>Q2. 단순 서버에 goal 두 개를 겹쳐 보내면?</summary>
 
-`simple_action_server`는 `rclpy.spin()` 하나로 돌고 `execute`가 `time.sleep()`으로 스레드를 붙잡고 있으므로, 두 번째 goal은 첫 번째가 끝난 뒤에야 처리됩니다. 검증 환경에서 확인한 것은 `fancy_action_server`(여러 스레드) 쪽이고, 그쪽은 두 goal이 동시에 실행되어 둘 다 SUCCEEDED로 끝났습니다. 어느 쪽이든 ROS 2의 `ActionServer`는 원서의 `SimpleActionServer`처럼 이전 goal을 자동으로 선점하지 않습니다. 단순 서버의 순차 처리는 직접 두 터미널에서 확인해 보세요.
+`simple_action_server`는 `rclpy.spin()` 하나로 돌고 `execute`가 `time.sleep()`으로 그 스레드를 계속 쓰고 있으므로, 두 번째 goal은 첫 번째가 끝난 뒤에야 시작됩니다. 같은 구조의 서버에 2초짜리 goal 두 개를 한꺼번에 보내 본 검증 스크립트(`checks/action_simple_server.sh`)에서는 서버 로그가 첫 번째 시작, 첫 번째 끝, 두 번째 시작, 두 번째 끝 순서로 찍혔고 둘 다 SUCCEEDED로 끝났습니다. 반면 `fancy_action_server`(여러 스레드)에서는 두 goal이 동시에 실행되어 둘 다 SUCCEEDED로 끝났습니다. 어느 쪽이든 ROS 2의 `ActionServer`는 원서의 `SimpleActionServer`처럼 이전 goal을 자동으로 선점하지 않습니다.
 
 </details>
 
@@ -846,13 +848,25 @@ QoS 불일치는 이 장의 코드로는 만들기 어렵습니다. 액션의 �
 
 <details><summary>Q4. on_cancel이 REJECT를 돌려주면?</summary>
 
-취소 요청에 대한 응답이 거절로 돌아오고, `is_cancel_requested`는 `False`로 남습니다. 서버는 그대로 끝까지 실행하므로 클라이언트는 결국 `SUCCEEDED` 결과를 받게 됩니다. `cancel_callback`을 아예 주지 않아도 기본 동작이 거절입니다. 이 경우는 검증 환경에서 직접 실행해 보지 않았습니다.
+취소가 받아들여지지 않습니다. 클라이언트가 받는 취소 응답에서 취소 중인 goal 목록(`goals_canceling`)이 비어 있고, 서버의 `is_cancel_requested`는 `False`로 남습니다. 서버는 그대로 끝까지 실행하므로 클라이언트는 결국 `SUCCEEDED` 결과를 받습니다. `cancel_callback`을 아예 주지 않아도 기본 동작이 거절이라 결과가 같습니다.
+
+주의할 점은 취소 응답의 `return_code`입니다. 거절했으니 `ERROR_REJECTED`(1)가 올 것 같지만, rclpy 서버는 거절한 goal을 `goals_canceling`에서 빼기만 하고 `return_code`는 `ERROR_NONE`(0)으로 둡니다. 그래서 취소가 받아들여졌는지는 `return_code`가 아니라 `goals_canceling`이 비어 있는지로 판단합니다. `ros2 action send_goal`도 Ctrl+C로 취소를 보낸 뒤 이 목록이 비어 있으면 `Failed to cancel goal` 오류를 냅니다(`ros2action/verb/send_goal.py`).
+
+검증 스크립트 `checks/action_cancel_reject.sh`로 세 경우를 비교한 결과는 다음과 같습니다.
+
+| 서버의 취소 콜백 | 취소 응답 | 서버의 `is_cancel_requested` | 최종 상태 |
+|---|---|---|---|
+| `REJECT`를 돌려줌 | `return_code=0`, `goals_canceling` 0개 | `False` | SUCCEEDED |
+| 주지 않음(기본값) | `return_code=0`, `goals_canceling` 0개 | `False` | SUCCEEDED |
+| `ACCEPT`를 돌려주지만 `canceled()`를 부르지 않음 | `return_code=0`, `goals_canceling` 1개 | `True` | SUCCEEDED |
+
+마지막 줄은 취소를 수락해도, 서버 코드가 `is_cancel_requested`를 확인해 `canceled()`를 불러야만 CANCELED로 끝난다는 뜻입니다(실습 5-4).
 
 </details>
 
 <details><summary>Q5. 클라이언트가 취소 없이 꺼지면?</summary>
 
-서버는 클라이언트가 사라진 것을 goal 처리에 반영하지 않습니다. goal은 계속 실행되어 끝까지 가고, 결과는 받을 사람이 없게 됩니다. 로봇을 움직이는 액션이라면 클라이언트가 꺼져도 로봇은 계속 움직인다는 뜻입니다. 그래서 클라이언트는 끝내기 전에 진행 중인 goal을 취소하는 습관을 들이는 것이 좋습니다. 이 동작은 검증 환경에서 직접 실행해 보지 않았으므로, 서버 로그를 보며 직접 확인해 보세요.
+서버는 클라이언트가 사라진 것을 goal 처리에 반영하지 않습니다. goal은 계속 실행되어 끝까지 가고, 결과는 받을 사람이 없게 됩니다. 로봇을 움직이는 액션이라면 클라이언트가 꺼져도 로봇은 계속 움직인다는 뜻입니다. 그래서 클라이언트는 끝내기 전에 진행 중인 goal을 취소하는 습관을 들이는 것이 좋습니다. 검증 스크립트 `checks/action_simple_server.sh`에서 goal이 수락된 직후 클라이언트를 Ctrl+C로 끝냈을 때도, 서버는 그 goal을 끝까지 실행하고 완료 로그를 남겼습니다.
 
 </details>
 
@@ -880,7 +894,12 @@ QoS 불일치는 이 장의 코드로는 만들기 어렵습니다. 액션의 �
   - `basics` 패키지의 ament flake8 검사(`colcon test`).
 - 확인 못 함:
   - `rqt_graph`에서 액션 토픽 보기 (GUI).
-  - 4절의 액션 타입 불일치, `succeed()` 삭제, 5절 Q2의 단순 서버 순차 처리, Q4의 `REJECT`, Q5의 클라이언트 강제 종료. 이 항목들은 rclpy 동작에 대한 설명이며 직접 실행하지 않았습니다.
+  - 4절의 액션 타입 불일치, `succeed()` 삭제. 이 항목들은 rclpy 동작에 대한 설명이며 직접 실행하지 않았습니다.
   - 기본 RMW(Fast DDS)에서의 동작. 이 WSL 환경에서는 Fast DDS로 프로세스 사이 통신이 되지 않아서 Cyclone DDS로만 검증했습니다.
   - 학습자의 실제 `~/rosbook_ws`에서의 빌드.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 결함 수정(2026-10-31): 직접 실행하지 않았던 Q2, Q4, Q5를 `example_interfaces/action/Fibonacci`로 만든 같은 구조의 서버로 확인하고 답을 고쳤습니다.
+  - Q2(`checks/action_simple_server.sh`): `rclpy.spin()` 하나로 도는 서버에 2초짜리 goal 두 개를 한꺼번에 보내자 서버 로그가 `start 1 done 1 start 2 done 2` 순서였고, 두 결과 모두 상태 4(SUCCEEDED)였습니다.
+  - Q4(`checks/action_cancel_reject.sh`): 취소 콜백이 `REJECT`를 돌려주거나 콜백을 주지 않으면 취소 응답이 `return_code=0 goals_canceling=0`, 서버의 `is_cancel_requested`가 `False`, 최종 상태가 4였습니다. 처음 답은 "응답이 거절로 돌아온다"고만 적어 `return_code`가 1(`ERROR_REJECTED`)일 것처럼 읽혔는데, rclpy `action/server.py`는 거절한 goal을 `goals_canceling`에서 빼기만 하고 `return_code`를 바꾸지 않습니다. 비교용으로 취소를 수락하고 `canceled()`를 부르지 않는 서버는 `goals_canceling=1`, `is_cancel_requested`가 `True`, 최종 상태 4였습니다.
+  - Q5(`checks/action_simple_server.sh`): goal이 수락된 뒤 클라이언트를 SIGINT로 끝내도 서버가 그 goal을 끝까지 실행했습니다.
+- 미검증 표시(2026-10-31): 실습 5-3에 rqt_graph 부분을 확인하지 못했다는 미검증 실습 표시를 붙였고, 4절의 `succeed()` 삭제 행에 (미검증)을 붙였습니다.

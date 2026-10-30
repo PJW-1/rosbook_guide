@@ -535,7 +535,7 @@ ros2 run tf2_ros tf2_echo map base_footprint --ros-args -p use_sim_time:=true
 - `ros2 node info /slam_toolbox`의 Subscribers에 `/scan: sensor_msgs/msg/LaserScan`, Publishers에 `/map: nav_msgs/msg/OccupancyGrid`, `/map_metadata`, `/pose`, `/tf`가 있습니다. Service Servers에는 lifecycle 서비스(`/slam_toolbox/change_state` 등)와 함께 `/slam_toolbox/save_map`, `/slam_toolbox/serialize_map`, `/slam_toolbox/dynamic_map`이 보입니다.
 - `ros2 topic info -v /map`의 publisher QoS가 `TRANSIENT_LOCAL`입니다. 9-3의 map_server와 같습니다. 그래서 rviz2나 map_info를 나중에 켜도 지도를 받습니다.
 - `ros2 topic info -v /tf`의 publisher 목록에 slam_toolbox, ros_gz_bridge 노드, robot_state_publisher가 함께 있습니다. 같은 토픽에 여러 노드가 각자 다른 변환을 냅니다.
-- `view_frames`는 현재 폴더에 `frames_<날짜>.pdf`와 `.gv` 파일을 만듭니다. PDF를 열면 `map → odom → base_footprint → base_link → base_scan ...` 트리가 보이고, 각 화살표에 그 변환을 낸 노드 이름(Broadcaster)이 적혀 있습니다. 이 장의 구조 그림과 비교합니다.
+- `view_frames`는 현재 폴더에 `frames_<날짜>.pdf`와 `.gv` 파일을 만듭니다. PDF를 열면 `map → odom → base_footprint → base_link → base_scan ...` 트리가 보입니다. 각 화살표에 Broadcaster라는 칸이 있지만, 노드 이름이 아니라 모두 `default_authority`라고 적혀 있습니다. `view_frames`가 쓰는 Python `TransformListener`가 받은 변환마다 이 이름을 붙이기 때문입니다(`tf2_ros/transform_listener.py`). 각 변환을 실제로 내는 노드는 위의 `ros2 topic info -v /tf`와 다음 목록으로 확인하고, 이 장의 구조 그림과 비교합니다.
   - `map → odom`: slam_toolbox
   - `odom → base_footprint`: Gazebo DiffDrive 플러그인이 gz 쪽 `/tf`로 내고, ros_gz_bridge가 ROS 2 `/tf`로 옮깁니다 (`turtlebot3_gazebo/params/turtlebot3_waffle_pi_bridge.yaml`의 `tf` 항목)
   - `base_footprint → base_link` 이하: robot_state_publisher (URDF의 고정 관절은 `/tf_static`, 바퀴 관절은 `/joint_states`를 받아 `/tf`)

@@ -137,8 +137,8 @@ ros2 bag play wave_bag
 - **`print()` 대신 logger를 씁니다.** 로봇에서는 노드를 launch로 띄워 두고 터미널을 보지 않는 경우가 많습니다. logger 출력은 로그 파일과 `/rosout`에도 남으므로 나중에 확인할 수 있고, 레벨로 양을 조절할 수 있습니다. 평소에 자세한 값은 `debug`로 남겨 두면 비용이 거의 없습니다.
 - **로그 레벨은 실행 인자로 바꿉니다.** 코드를 고치지 않고 `--log-level 로거이름:=debug`로 문제의 노드만 낮추는 습관을 둡니다. 로거 이름 없이 `--log-level debug`만 주면 ROS 내부 라이브러리의 로그까지 쏟아집니다.
 - **연결 문제는 `ros2 doctor --report`와 `ros2 topic info -v`로 먼저 확인합니다.** 타입이나 도메인이 맞지 않으면 경고 없이 조용히 끊어지므로(실습 21-4), 로그에 아무것도 없다는 사실이 "문제없음"을 뜻하지 않습니다. 개수, 타입, QoS를 숫자와 글자로 확인한 다음에 코드를 의심합니다.
-- **CLI가 출력 없이 멈추면 daemon부터 확인합니다.** 이 가이드의 WSL 환경에서는 daemon이 없을 때 `ros2` 명령이 2분 넘게 멈춥니다. Ctrl+C로 끊고 `ros2 daemon start`를 실행한 뒤 다시 시도합니다(README의 daemon 절, 실습 21-8). `ros2 daemon stop`을 했다면 바로 이어서 `ros2 daemon start`를 입력합니다.
-- **이상한 동작은 bag으로 남겨 재현합니다.** 로봇에서 문제가 생긴 순간의 토픽을 기록해 두면, 로봇 없이도 같은 입력으로 노드를 몇 번이고 다시 시험할 수 있습니다. 모든 토픽(`-a`)을 기록하면 디스크와 성능 부담이 크므로 필요한 토픽만 고릅니다.
+- **CLI가 출력 없이 멈추면 daemon부터 확인합니다.** 이 가이드의 WSL 환경에서는 daemon이 없을 때 `ros2` 명령이 2분 넘게 멈춥니다. Ctrl+C로 끊고 `ros2 daemon start`를 실행한 뒤 다시 시도합니다([부록](appendix_wsl_environment.md)의 daemon 절, 실습 21-8). `ros2 daemon stop`을 했다면 바로 이어서 `ros2 daemon start`를 입력합니다.
+- **이상한 동작은 bag으로 남겨 재현합니다.** 로봇에서 문제가 생긴 순간의 토픽을 기록해 두면, 로봇 없이도 같은 입력으로 노드를 몇 번이고 다시 시험할 수 있습니다. 모든 토픽(`--all-topics`)이나 토픽과 서비스 전체(`-a`)를 기록하면 디스크와 성능 부담이 크므로 필요한 토픽만 고릅니다.
 
 ## 2. 원서(ROS 1)와 달라지는 점
 
@@ -256,6 +256,8 @@ ls -t ~/.ros/log | head -3
 
 ### 실습 21-2. /rosout 과 실행 중 로그 레벨 바꾸기
 
+> **미검증 실습**: 문서를 쓸 때 이 실습 가운데 rqt_console 창(GUI)을 실제로 띄워 확인하지 못했습니다. `/rosout`과 로거 서비스 명령의 출력은 확인했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 두 개. 터미널 1에서 `ros2 run basics battery_monitor` 를 실행해 둡니다.
 
 **직접 입력**: 터미널 2:
@@ -297,6 +299,8 @@ ros2 run rqt_console rqt_console
 **생각해 볼 질문**: 원서는 ROS 1에서 도구가 모든 노드에 일일이 연결하는 시간을 줄이려고 `/rosout_agg` 를 두었다고 설명합니다 (원서 PDF p.402~403). ROS 2에서는 그 노드 없이 어떻게 늦게 켠 도구도 로그를 받을 수 있을까요?
 
 ### 실습 21-3. 그래프로 연결 확인하기
+
+> **미검증 실습**: 문서를 쓸 때 이 실습 가운데 rqt_graph 화면(GUI)을 실제로 띄워 확인하지 못했습니다. 명령줄 도구의 출력은 확인했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 세 개
 
@@ -387,13 +391,15 @@ ROS_DOMAIN_ID=29 ros2 run basics topic_publisher
 | `ROS_DOMAIN_ID=29` | 이 명령 하나만 다른 도메인(서로 보이지 않는 별도의 ROS 2 네트워크 번호)에서 실행합니다. |
 
 **관찰**:
-- (1) `ros2 topic list -t` 에 `/counter [std_msgs/msg/Int32, std_msgs/msg/String]` 가 나옵니다. `ros2 topic info -v` 에서 발행자는 `std_msgs/msg/String`, 구독자는 `std_msgs/msg/Int32` 입니다. `ros2 topic echo /counter` 는 `Cannot echo topic '/counter', as it contains more than one type` 로 끝납니다. 터미널 1의 구독자는 아무것도 받지 못하고, **어느 쪽에도 경고가 찍히지 않습니다.** 원서의 ROS 1은 경고를 남겼다는 점과 다릅니다 (원서 PDF p.408).
+- (1) `ros2 topic list -t` 에 `/counter [std_msgs/msg/Int32, std_msgs/msg/String]` 가 나옵니다. `ros2 topic info -v` 에서 발행자는 `std_msgs/msg/String`, 구독자는 `std_msgs/msg/Int32` 입니다. `ros2 topic echo /counter` 는 `Cannot echo topic '/counter', as it contains more than one type` 로 끝납니다. 터미널 1의 구독자는 아무것도 받지 못하고, **어느 쪽에도 경고가 찍히지 않습니다.** 원서의 ROS 1은 경고를 남겼다는 점과 다릅니다 (원서 PDF p.408). 이 가이드가 쓰는 Cyclone DDS뿐 아니라 Jazzy의 기본값인 Fast DDS에서도, 발행자와 구독자가 서로 다른 프로세스이면 경고가 없었습니다(7절).
 - (2) 터미널 1에 `New publisher discovered on topic 'counter', offering incompatible QoS. No messages will be received from it. Last incompatible policy: RELIABILITY` 경고가 찍힙니다. 발행자 쪽에도 `requesting incompatible QoS` 경고가 찍힙니다. 이 경우는 로그로 찾을 수 있습니다.
 - (3) 구독자는 아무것도 받지 못하고 경고도 없습니다. 터미널 3의 `ros2 node list` 에도 다른 도메인의 노드는 보이지 않습니다.
 
 **생각해 볼 질문**: 세 경우 중 로그만으로 원인을 찾을 수 있는 것은 무엇이고, CLI로 확인해야 하는 것은 무엇인가요?
 
 ### 실습 21-5. 값을 그래프로 보기: rqt_plot과 PlotJuggler
+
+> **미검증 실습**: 문서를 쓸 때 rqt_plot과 PlotJuggler 화면(GUI)을 실제로 띄워 확인하지 못했습니다. 두 `sine_wave` 노드와 `ros2 topic hz`, `ros2 topic echo` 출력은 확인했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 세 개
 
@@ -491,6 +497,8 @@ ros2 run plotjuggler plotjuggler
 
 ### 실습 21-6. 여러 센서를 rviz2에서 겹쳐 보기
 
+> **미검증 실습**: 문서를 쓸 때 Gazebo와 rviz2를 띄우는 이 실습 전체를 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 두 개. TurtleBot3 모델이 `waffle_pi` 로 설정된 상태(README 참고). 이 실습은 Gazebo와 rviz2 창이 뜹니다.
 
 **직접 입력**:
@@ -534,6 +542,8 @@ rviz2 창에서 다음을 차례로 합니다.
 **생각해 볼 질문**: rviz2를 `use_sim_time:=true` 없이 띄우면 어떤 일이 생길지 예상해 보세요. 실습 21-8의 실험과 연결됩니다.
 
 ### 실습 21-7. bag으로 기록하고 다시 틀기
+
+> **미검증 실습**: 문서를 쓸 때 이 실습 가운데 rqt_bag 화면(GUI)을 실제로 띄워 확인하지 못했습니다. `ros2 bag` 명령의 출력은 확인했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 세 개. 실습 21-5의 두 노드(`sine_wave`, `cosine_wave`)를 띄워 둡니다.
 
@@ -601,7 +611,7 @@ ros2 run rqt_bag rqt_bag ~/wave_bag
 
 | 줄 | 설명 |
 |---|---|
-| `ros2 bag record -o wave_bag --topics /sin /cos` | 두 토픽을 `wave_bag` 폴더에 기록합니다. 모든 토픽을 기록하려면 `--all-topics`(줄여서 `-a`)를 쓰지만, 원서 경고처럼 큰 시스템에서는 디스크와 성능 부담이 큽니다 (원서 PDF p.416). |
+| `ros2 bag record -o wave_bag --topics /sin /cos` | 두 토픽을 `wave_bag` 폴더에 기록합니다. 모든 토픽을 기록하려면 `--all-topics` 를 씁니다. `-a` 는 `--all` 의 줄임이라 토픽과 함께 서비스까지 기록합니다. 어느 쪽이든 원서 경고처럼 큰 시스템에서는 디스크와 성능 부담이 큽니다 (원서 PDF p.416). |
 | `ros2 bag info` | 기간, 메시지 수, 토픽별 타입과 개수, 저장 형식을 보여 줍니다. |
 | `ros2 topic echo /sin std_msgs/msg/Float64` | 타입을 직접 주면 발행자가 생기기 전부터 기다릴 수 있습니다. |
 | `ros2 bag play wave_bag` | 기록한 메시지를 원래 시간 간격대로 다시 발행합니다. |
@@ -634,7 +644,7 @@ ros2 run rqt_bag rqt_bag ~/wave_bag
 2. 비교 실험: 같은 명령에 `--no-daemon --spin-time 3` 을 붙이면 정상으로 끝났습니다. 문제는 노드나 DDS가 아니라 CLI와 daemon 사이에 있다고 좁혔습니다.
 3. 소스 확인: CLI가 daemon에 연결되는지 판단하는 함수 `DaemonNode.connected` (`/opt/ros/jazzy/lib/python3.12/site-packages/ros2cli/node/daemon.py`)를 읽었습니다. 이 함수는 daemon 포트(11511 + `ROS_DOMAIN_ID`)에 접속을 시도하고, **접속이 거절(`ConnectionRefusedError`)되면** "daemon 없음"으로 판단해 다음 단계로 넘어갑니다.
 4. 포트 실험: 이 WSL 설정에서는 닫힌 localhost 포트에 접속하면 거절되지 않고 응답 없이 시간이 흘렀습니다. 그래서 CLI는 "daemon 없음"을 알아채지 못하고 계속 기다렸습니다. 접속 시도는 운영체제의 TCP 재시도 횟수(`tcp_syn_retries` 6)를 다 쓴 약 2분 17초 뒤 시간 초과로 끝나는데, 이 예외는 `ConnectionRefusedError`가 아니라서 처리되지 않고 Traceback이 됩니다.
-5. 해결: 작업 전에 `ros2 daemon start` 로 daemon을 미리 띄우고, `ros2 daemon stop` 을 했다면 바로 `ros2 daemon start` 를 합니다. README의 안내가 이 결과입니다.
+5. 해결: 작업 전에 `ros2 daemon start` 로 daemon을 미리 띄우고, `ros2 daemon stop` 을 했다면 바로 `ros2 daemon start` 를 합니다. README와 부록(`appendix_wsl_environment.md`)의 안내가 이 결과입니다.
 
 **직접 입력**: 소스를 직접 확인해 봅니다.
 
@@ -662,14 +672,14 @@ grep -n "base_port" /opt/ros/jazzy/lib/python3.12/site-packages/ros2cli/daemon/_
 |---|---|---|
 | `--log-level battery:=debug` (로거 이름 오타) | 오류 없이 실행되지만 DEBUG 줄이 하나도 나오지 않습니다. 없는 로거의 레벨을 바꾼 것입니다. | `ros2 service call /battery_monitor/get_logger_levels ...` 로 실제 로거 이름 확인 |
 | `--log-level loud` (없는 레벨) | `[ERROR] ... [rcl]: Failed to parse global arguments` 와 트레이스백을 남기고 노드가 시작하지 못합니다. | 오류 메시지의 첫 줄 |
-| 코드에서 `enable_logger_service=True` 를 빼고 실행 | `ros2 service list` 에 `get_logger_levels`, `set_logger_levels` 가 없어서 실행 중 레벨을 바꿀 수 없습니다. | `ros2 service list -t \| grep logger` |
+| 코드에서 `enable_logger_service=True` 를 빼고 실행 | `ros2 service list` 에 `get_logger_levels`, `set_logger_levels` 가 없어서 실행 중 레벨을 바꿀 수 없습니다. (미검증) | `ros2 service list -t \| grep logger` |
 | 구독자 토픽 이름 오타 | 오류 없이 아무것도 받지 못합니다(실습 21-3). | `ros2 topic info /이름` 의 발행자 또는 구독자 수 0 |
 | 같은 토픽에 다른 타입 발행 | 경고 없이 받지 못합니다. `ros2 topic echo` 는 타입이 둘이라며 거부합니다(실습 21-4). | `ros2 topic list -t` |
 | 발행자를 BEST_EFFORT로 | 양쪽에 `incompatible QoS` 경고가 찍히고 받지 못합니다(실습 21-4). | `ros2 topic info -v /counter` 의 Reliability |
 | 한쪽 터미널만 `ROS_DOMAIN_ID` 가 다름 | 서로 보이지 않습니다. 경고도 없습니다. | 양쪽 터미널에서 `echo $ROS_DOMAIN_ID`, `ros2 doctor --report` 의 네트워크 항목 |
-| 노드를 Ctrl+C로 죽인 뒤 토픽 확인 | 발행자가 사라져 `Publisher count: 0` 이 되고 구독자는 조용히 기다립니다. | `ros2 node list`, `ros2 topic info /counter` |
+| 노드를 Ctrl+C로 죽인 뒤 토픽 확인 | 발행자가 사라져 `Publisher count: 0` 이 되고 구독자는 조용히 기다립니다. (미검증) | `ros2 node list`, `ros2 topic info /counter` |
 | `ros2 run basics sine_wave --ros-args -r wave:=sin -p use_sim_time:=true` 를 `/clock` 없이 실행 | 노드는 떠 있지만 `/sin` 에 메시지가 하나도 나오지 않습니다. 시뮬레이션 시각이 흐르지 않아 타이머가 한 번도 실행되지 않기 때문입니다. 다른 터미널에서 `ros2 bag play ~/wave_bag --topics /cos --clock 50` 으로 `/clock` 을 공급하면 그때부터 값이 나옵니다. | `ros2 topic hz /sin`, `ros2 topic echo /clock --once` |
-| 시뮬레이션 노드는 `use_sim_time:=true`, 내가 띄운 노드는 기본값 | 두 노드의 시각이 크게 달라 TF 변환이나 시각 비교가 실패합니다. rviz2에서는 표시가 안 되거나 TF 경고가 납니다. | `ros2 param get /노드 use_sim_time` |
+| 시뮬레이션 노드는 `use_sim_time:=true`, 내가 띄운 노드는 기본값 | 두 노드의 시각이 크게 달라 TF 변환이나 시각 비교가 실패합니다. rviz2에서는 표시가 안 되거나 TF 경고가 납니다. (미검증) | `ros2 param get /노드 use_sim_time` |
 | `ros2 topic echo /sin` 을 발행자보다 먼저 실행(타입 생략) | `WARNING: topic [/sin] does not appear to be published yet`, `Could not determine the type for the passed topic` 으로 끝납니다. | 타입을 직접 주거나 발행자를 먼저 띄움 |
 
 ## 5. 확인 질문
@@ -749,3 +759,9 @@ ROS 배포판(Jazzy), OS(Ubuntu 24.04 on WSL2), WSL 네트워크 모드(`network
 - 확인 못 함(GUI): rqt_console, rqt_graph, rqt_plot, rqt_bag, rviz2, PlotJuggler 화면과 조작 방법, Gazebo 실행과 실습 21-6 전체. 창을 띄우는 프로그램은 검증 환경에서 실행하지 않았습니다. rqt_graph 체크박스 이름, PlotJuggler 메뉴 이름, rviz2 표시 항목 이름은 일반적인 화면 구성을 바탕으로 적었으므로 화면과 다를 수 있습니다.
 - 확인 못 함: `enable_logger_service=True` 를 뺐을 때의 서비스 목록, `print()` 출력 위치(Q1), 노드를 죽인 뒤의 발행자 수 변화, 시각이 다른 노드 사이의 TF 오류 문구, PlotJuggler의 `plotjuggler` 패키지 실행 파일 이름(설치하지 않음), 실습 21-8의 포트 실험(조정자가 확인한 결과를 옮겼습니다).
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 결함 수정(2026-10-31):
+  - 실습 21-7 해설과 1절 실무 메모의 `--all-topics`(줄여서 `-a`)를 고쳤습니다. 설치된 `ros2bag/verb/record.py` 에서 `-a` 는 토픽과 서비스를 모두 기록하는 `--all` 의 줄임이고, `--all-topics` 에는 줄임 옵션이 없습니다.
+  - 실습 21-4 (1)의 "경고 없음"을 두 RMW에서 다시 확인했습니다. `checks/type_mismatch_warning.sh` 에서 String 발행자와 Int32 구독자를 다른 프로세스로 띄우자 Cyclone DDS와 Fast DDS 모두 `incompatible type` 경고가 0줄, 수신이 0건이었습니다. 두 경우 모두 그래프 조회에는 발행자 `std_msgs/msg/String`, 구독자 `std_msgs/msg/Int32` 가 보였으므로, 서로를 발견하지 못해서 생긴 결과는 아닙니다. 같은 프로세스 안에서 둘을 만들면 Cyclone DDS는 역시 조용했고, Fast DDS는 구독을 만드는 단계에서 `create_subscription() called for existing topic name rt/tm with incompatible type` 오류를 냈습니다.
+  - README에 있던 환경 설명이 `appendix_wsl_environment.md` 로 옮겨져서 1절과 실습 21-8의 참조를 바꿨습니다.
+  - 실습 21-3의 rqt_graph 체크 상자 이름("Dead sinks", "Leaf topics")과 처음에 켜져 있는 상태는 설치된 `rqt_graph/resource/RosGraph.ui` 와 `rqt_graph/ros_graph.py` 에서 확인했습니다. 화면을 띄워 보지는 않았습니다.
+- 미검증 표시(2026-10-31): GUI를 띄워야 하는 실습 21-2(rqt_console), 21-3(rqt_graph), 21-5(rqt_plot, PlotJuggler), 21-6(Gazebo, rviz2), 21-7(rqt_bag)에 미검증 실습 표시를 붙였고, 4절의 `enable_logger_service` 삭제 행, 노드 종료 행, `use_sim_time` 불일치 행에 (미검증)을 붙였습니다.

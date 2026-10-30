@@ -562,13 +562,13 @@ ros2 run basics_cpp topic_subscriber
 
 | 바꿀 것 | 예상 증상 | 원인을 확인하는 명령 |
 |---|---|---|
-| `CMakeLists.txt` 에서 `install(TARGETS ...)` 블록을 지우고 빌드 | 빌드는 성공합니다. `ros2 run basics_cpp topic_publisher` 가 `No executable found` 를 출력합니다. | `ros2 pkg executables basics_cpp`, `ls ~/rosbook_ws/install/basics_cpp/lib/basics_cpp` |
+| `CMakeLists.txt` 에서 `install(TARGETS ...)` 블록을 지우고, `rm -rf ~/rosbook_ws/build/basics_cpp ~/rosbook_ws/install/basics_cpp` 로 이전 빌드 결과를 지운 뒤 다시 빌드 | 빌드는 성공합니다. `ros2 run basics_cpp topic_publisher` 가 `No executable found` 를 출력합니다. 지우지 않고 다시 빌드만 하면 `--symlink-install` 이 전에 만든 링크가 `install/` 에 남아 있어서 그대로 실행됩니다. 확인한 뒤에는 블록을 되살리고 다시 빌드합니다. | `ros2 pkg executables basics_cpp`, `ls ~/rosbook_ws/install/basics_cpp/lib/basics_cpp` |
 | `target_link_libraries(topic_publisher rclcpp::rclcpp)` 로 `${std_msgs_TARGETS}` 를 뺌 | 컴파일 단계에서 `fatal error: std_msgs/msg/int32.hpp: No such file or directory` 로 실패합니다. 링크 줄이 헤더 검색 경로까지 책임진다는 뜻입니다. | 오류 메시지의 첫 줄과 파일 이름 |
 | 구독자 콜백 인자를 `const std_msgs::msg::String & msg` 로 바꿈(헤더는 그대로) | `error: 'String' in namespace 'std_msgs::msg' does not name a type` 으로 실패합니다. 헤더를 넣고 타입만 다르게 하면 템플릿 오류가 길게 이어지므로 첫 `error:` 줄부터 읽습니다. | `colcon build` 출력에서 첫 `error:` 줄 |
 | `--symlink-install` 로 빌드한 뒤 `500ms` 를 `100ms` 로 고치고 다시 빌드하지 않음 | 여전히 2 Hz로 발행합니다. 다시 빌드하면 10 Hz가 됩니다. | `ros2 topic hz /counter` |
 | C++ 구독자가 떠 있는 `/counter` 에 `ros2 topic pub /counter std_msgs/msg/Float64 "{data: 1.5}"` | 구독자는 아무것도 받지 못하고 경고도 없습니다(21장의 타입 불일치와 같습니다). | `ros2 topic list -t` |
-| `timer_` 를 멤버가 아닌 생성자의 지역 변수(`auto timer = create_wall_timer(...)`)로 만듦 | 노드는 떠 있지만 아무것도 발행하지 않을 것으로 예상합니다. 타이머 객체가 생성자 끝에서 사라지기 때문입니다. | `ros2 topic hz /counter`, `ros2 node info /topic_publisher` |
-| `package.xml` 의 `<depend>basics_interfaces</depend>` 를 지우고 워크스페이스 전체를 처음부터 빌드 | colcon이 빌드 순서를 모르게 되어, `basics_interfaces` 보다 먼저 빌드되면 `find_package(basics_interfaces)` 에서 실패할 수 있습니다. | `colcon graph` |
+| `timer_` 를 멤버가 아닌 생성자의 지역 변수(`auto timer = create_wall_timer(...)`)로 만듦 | 노드는 떠 있지만 아무것도 발행하지 않습니다. 노드는 타이머를 약한 참조(`std::weak_ptr`)로만 들고 있어서, 지역 변수에만 담은 타이머 객체는 생성자가 끝날 때 사라지기 때문입니다. 반환값을 저장하지 않아도 동작하는 rclpy(3장 Q1)와 다른 점입니다. | `ros2 topic hz /counter`, `ros2 node info /topic_publisher` |
+| `package.xml` 의 `<depend>basics_interfaces</depend>` 를 지우고 워크스페이스 전체를 처음부터 빌드 | colcon이 빌드 순서를 모르게 되어, `basics_interfaces` 보다 먼저 빌드되면 `find_package(basics_interfaces)` 에서 실패할 수 있습니다. (미검증) | `colcon graph` |
 
 ## 5. 확인 질문
 
@@ -628,7 +628,11 @@ CMake 설정 단계는 통과할 가능성이 큽니다. 대신 `${basics_interf
   - 4절의 다섯 가지: `install` 삭제 시 `No executable found`, `${std_msgs_TARGETS}` 삭제 시 `int32.hpp: No such file or directory`, `String` 으로 바꾸면 `does not name a type`, 다시 빌드 전 2 Hz와 다시 빌드 후 10 Hz, Float64 발행 시 C++ 구독자 무수신. 수정 후 다시 빌드 약 5초, 첫 빌드 약 10초.
 - 확인 못 함:
   - `--dependencies` 에 `basics_interfaces` 까지 한 번에 넣은 `ros2 pkg create` 명령(같은 형식이라 동작할 것으로 봅니다).
-  - 4절의 `timer_` 를 지역 변수로 만든 경우와 `package.xml` 의존성을 지운 경우(예상만 적었습니다).
+  - 4절의 `package.xml` 의존성을 지운 경우(예상만 적었습니다).
   - Q1의 `find_package` 누락 시 정확한 오류 위치, Q4의 연속 공백 입력에 대한 실제 응답(원서 방식은 컴파일되지 않아 실행 불가, 이 장 방식은 `std::istringstream` 의 동작에 근거).
   - 원서의 C++ 코드 자체는 ROS 1 환경이 없어 컴파일해 보지 않았습니다. 6절의 오류는 코드를 읽어 판단했습니다.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 결함 수정(2026-10-31):
+  - 4절의 `install(TARGETS ...)` 행에 이전 빌드 결과를 지우는 단계를 넣었습니다. `checks/stale_cmake_install.sh` 에서 블록을 지우고 같은 워크스페이스에서 다시 빌드만 하면 `install/` 에 전에 만든 링크가 남아 `ros2 run basics_cpp topic_publisher` 가 그대로 실행됐고, `build/basics_cpp` 와 `install/basics_cpp` 를 지운 뒤 다시 빌드하면 `No executable found` 가 나왔으며 `install/basics_cpp/lib/basics_cpp/` 폴더가 없었습니다. 위 "확인함"의 `No executable found` 는 깨끗한 상태에서 빌드한 결과였던 것으로 봅니다.
+  - 4절의 지역 변수 타이머 행을 예상에서 확인한 결과로 바꿨습니다. `checks/rclcpp_local_timer.sh` 에서 200 ms 타이머를 멤버 변수에 담은 노드는 3초 동안 로그를 13번 남겼고, 생성자의 지역 변수로만 받은 노드는 3초 동안 살아 있었지만 한 번도 남기지 않았습니다. 근거 코드는 rclcpp의 콜백 그룹이 타이머를 `std::weak_ptr` 로 보관하는 부분입니다.
+- 미검증 표시(2026-10-31): 4절의 `package.xml` 의존성 삭제 행에 (미검증)을 붙였습니다.

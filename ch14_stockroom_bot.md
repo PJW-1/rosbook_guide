@@ -349,7 +349,7 @@ mkdir -p ~/rosbook_ws/src/stockroom_bot/worlds ~/rosbook_ws/src/stockroom_bot/la
 | 앞부분의 plugin, light, ground | 12장의 `course.sdf`와 같습니다. |
 | `model name="walls"` | 6 m x 4 m 방을 높이 0.5 m 벽으로 둘러쌉니다. LiDAR(높이 약 0.13 m)가 벽을 보고 SLAM 지도를 만들 수 있습니다. 벽마다 `collision`과 `visual`을 함께 둡니다. |
 | `shelf_red/green/blue`의 `<pose>` | 북쪽 벽(y=2) 앞, x = -1.5, 0, 1.5에 선반을 놓습니다. |
-| `visual name="panel"`, `<pose>0 -0.155 0.12 ...` | 선반 앞면(방 쪽, -y 방향)에 붙은 20 cm x 15 cm 색 패널입니다. 중심 높이 0.12 m는 카메라 높이(약 0.09 m)와 비슷해서 정면에서 잘 보입니다. |
+| `visual name="panel"`, `<pose>0 -0.155 0.12 ...` | 선반 앞면(방 쪽, -y 방향)에 붙은 20 cm x 15 cm 색 패널입니다. 중심 높이 0.12 m는 카메라 높이(약 0.10 m)와 비슷해서 정면에서 잘 보입니다. |
 | `visual name="item"` | 선반 위에 놓인 물건(색 상자)입니다. 충돌 모델이 없어 물리적으로 부딪히지는 않고 보이기만 합니다. 가짜 그리퍼는 이것을 실제로 옮기지 않습니다. |
 | `model name="counter"` | 남쪽 벽 앞의 배달 카운터입니다. |
 
@@ -1002,7 +1002,7 @@ ros2 topic info -v /cmd_vel
 
 <details><summary>Q3. 선반 위 물건 상자가 지도에 나타나는가? (14-3)</summary>
 
-나타나지 않습니다. 이유는 높이입니다. TurtleBot3의 LiDAR는 바닥에서 약 0.13 m 높이(TF로는 `base_footprint`에서 `base_scan`까지 0.132 m)의 수평면 하나만 훑으므로, 0.4~0.5 m 높이에 있는 상자에는 광선이 닿지 않습니다. 선반 자체(0~0.4 m)는 이 높이를 지나므로 나타납니다. `collision`이 없다는 점은 이유가 아닙니다. 시뮬의 LiDAR는 `gpu_lidar` 센서이고, 렌더링으로 visual 형상까지의 거리를 재기 때문입니다. `collision`은 물리 계산(부딪힘, 받침)에만 쓰입니다. 그래서 같은 상자를 LiDAR 높이에 놓으면 `collision`이 없어도 스캔에 나타납니다.
+나타나지 않습니다. 이유는 높이입니다. TurtleBot3의 LiDAR는 바닥에서 약 0.13 m 높이(TF로는 `base_footprint`에서 `base_scan`까지 0.132 m)의 수평면 하나만 훑으므로, 0.4~0.5 m 높이에 있는 상자에는 광선이 닿지 않습니다. 선반 자체(0~0.4 m)는 이 높이를 지나므로 나타납니다. `collision`이 없다는 점은 이유가 아닙니다. 시뮬의 LiDAR는 `gpu_lidar` 센서이고, 렌더링으로 visual 형상까지의 거리를 재기 때문입니다. `collision`은 물리 계산(부딪힘, 받침)에만 쓰입니다. 그래서 같은 상자를 LiDAR 높이에 놓으면 `collision`이 없어도 스캔에 나타날 것으로 예상합니다. 이 경우는 실행해 확인하지 않았습니다.
 
 </details>
 
@@ -1053,4 +1053,4 @@ ros2 topic info -v /cmd_vel
   - 4절의 타입 불일치(Float64), 카메라 QoS, `use_sim_time` 불일치, `color:=yellow` 증상은 실행하지 않은 예상입니다.
   - 합성 이미지 시험 중 한 번, `marker/error`가 몇 개 나온 뒤 끊겨 정렬이 실패한 적이 있습니다. 같은 조건으로 다시 실행했을 때는 재현되지 않았고 원인은 확인하지 못했습니다.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
-- 결함 수정(2026-10-31): Q3의 답에서 "물건 상자에 `collision`이 없어 LiDAR 광선이 통과한다"는 이유를 지우고, 높이만으로 설명하도록 고쳤습니다. 근거는 `turtlebot3_gazebo/models/turtlebot3_waffle_pi/model.sdf`의 LiDAR가 `type="gpu_lidar"`이고, `gz/sensors/GpuLidarSensor.hh`의 설명이 visual 형상까지의 거리를 잰다고 적은 점입니다. LiDAR 높이 0.17 m는 0.13 m(TF 0.132 m)로 고쳐 6장과 맞췄습니다. 근거는 `turtlebot3_description/urdf/turtlebot3_waffle_pi.urdf`의 `base_joint` 0.010과 `scan_joint` 0.122, `model.sdf`의 센서 `pose` 0.121(모델 원점 기준)입니다. 실습 14-2 월드 해설 표의 같은 숫자와 `item` 설명도 함께 고쳤습니다. 시뮬은 실행하지 않았으므로 collision 없는 상자가 LiDAR 높이에서 스캔에 잡히는지는 직접 보지 못했습니다. 7절에서 실행하지 않았다고 적은 실습 14-2(Gazebo 화면), 14-3, 14-4(시뮬 카메라), 14-7과 4절의 해당 네 행에 미검증 표시를 달았습니다.
+- 결함 수정(2026-10-31): Q3의 답에서 "물건 상자에 `collision`이 없어 LiDAR 광선이 통과한다"는 이유를 지우고, 높이만으로 설명하도록 고쳤습니다. 근거는 `turtlebot3_gazebo/models/turtlebot3_waffle_pi/model.sdf`의 LiDAR가 `type="gpu_lidar"`이고, `gz/sensors/GpuLidarSensor.hh`의 설명이 visual 형상까지의 거리를 잰다고 적은 점입니다. LiDAR 높이 0.17 m는 0.13 m(TF 0.132 m)로 고쳐 6장과 맞췄습니다. 근거는 `turtlebot3_description/urdf/turtlebot3_waffle_pi.urdf`의 `base_joint` 0.010과 `scan_joint` 0.122, `model.sdf`의 센서 `pose` 0.121(모델 원점 기준)입니다. 실습 14-2 월드 해설 표의 같은 숫자와 `item` 설명도 함께 고쳤습니다. 시뮬은 실행하지 않았으므로 collision 없는 상자가 LiDAR 높이에서 스캔에 잡히는지는 직접 보지 못했습니다. 7절에서 실행하지 않았다고 적은 실습 14-2(Gazebo 화면), 14-3, 14-4(시뮬 카메라), 14-7과 4절의 해당 네 행에 미검증 표시를 달았습니다. 14-2 표의 카메라 높이 0.09 m도 같은 URDF의 `base_joint` 0.010, `camera_joint` 0.084, `camera_rgb_joint` 0.009를 더한 약 0.10 m로 고쳤습니다.

@@ -559,7 +559,7 @@ ros2 run basics periodic_client
 | 요청 필드 이름 오타: `"{word: 'a b'}"` | `Failed to populate field: 'WordCount_Request' object has no attribute 'word'` 후 바로 종료합니다. | `ros2 interface show basics_interfaces/srv/WordCount` |
 | 요청 값의 타입을 다르게 줌: `"{words: 3}"` | 검증 환경에서는 오류 없이 `words='3'`으로 바뀌어 `count=1`이 돌아왔습니다. 필드 이름은 엄격히 검사하지만 값은 문자열로 바뀔 수 있다는 점을 기억합니다. | `ros2 service call` 출력의 `making request:` 줄에서 실제로 보낸 값을 확인합니다. |
 | 서버를 끈 상태에서 클라이언트 실행 | `word_count 서비스를 기다리는 중...`이 1초마다 반복됩니다. | 다른 터미널에서 `ros2 service list` |
-| 서버 콜백에서 `return response`를 지움 | 서버 터미널에 오류가 찍히고 클라이언트는 응답을 받지 못합니다. (확인 질문 Q2 참고) | 서버 터미널의 로그 |
+| 서버 콜백에서 `return response`를 지움 | 서버가 마지막 줄이 `TypeError`뿐인 트레이스백을 남기고 종료됩니다. 클라이언트는 응답을 받지 못하고 계속 기다립니다. (확인 질문 Q2 참고) | 서버 터미널의 로그 |
 | `periodic_client`에서 `call_async()` 대신 `call()` | 첫 요청 뒤로 아무것도 찍히지 않습니다 (실습 4-5). | 서버 로그에 요청이 찍혔는지 확인해서, 멈춘 쪽이 클라이언트라는 것을 확인합니다. |
 | `service_client.py`에서 `spin_until_future_complete` 줄 삭제 | `AttributeError: 'NoneType' object has no attribute 'count'` | future가 채워지기 전에 `future.result()`를 꺼냈기 때문입니다. 서버 로그에는 요청이 찍혀 있습니다. |
 
@@ -573,7 +573,19 @@ ROS 2에서 msg, srv, action 정의를 코드로 생성하는 일은 `rosidl_gen
 
 <details><summary>Q2. 서비스 콜백이 응답을 반환하지 않으면?</summary>
 
-rclpy는 콜백의 반환값을 응답으로 보냅니다. `None`이 돌아오면 응답 메시지로 보낼 수 없어서 서버 쪽에서 오류가 나고, 클라이언트는 응답을 받지 못합니다. 원서는 "실패하면 None을 반환한다"는 rospy의 관례를 소개하지만(PDF p.75), ROS 2에서는 응답 타입에 성공 여부 필드(예: `bool success`, `string message`)를 넣어서 실패를 알리는 방식이 일반적입니다. 이 가이드의 검증 환경에서는 이 경우의 정확한 오류 문구를 확인하지 않았습니다.
+rclpy는 콜백의 반환값을 응답으로 보냅니다. `None`이 돌아오면 응답 메시지로 보낼 수 없어서 서버 쪽에서 오류가 나고, 클라이언트는 응답을 받지 못합니다.
+
+실제로 실행하면 서버 터미널에 다음과 같은 트레이스백이 찍히고 서버 프로세스가 끝납니다. rclpy의 `send_response`가 응답 타입이 아닌 값을 받으면 메시지 없이 `TypeError`를 던지고, 이 예외가 `rclpy.spin()` 밖으로 나오기 때문입니다. 클라이언트(`ros2 service call`)는 `requester: making request: ...`를 출력한 뒤 응답을 받지 못한 채 계속 기다립니다.
+
+```
+  File ".../rclpy/service.py", line 75, in send_response
+    raise TypeError()
+TypeError
+```
+
+오류 문구에 `None`이나 콜백 이름이 나오지 않으므로, 서비스 서버가 마지막 줄이 `TypeError`뿐인 트레이스백을 남기면 콜백의 `return`부터 확인합니다.
+
+원서는 "실패하면 None을 반환한다"는 rospy의 관례를 소개하지만(PDF p.75), ROS 2에서는 응답 타입에 성공 여부 필드(예: `bool success`, `string message`)를 넣어서 실패를 알리는 방식이 일반적입니다.
 
 </details>
 
@@ -616,5 +628,5 @@ rclpy는 콜백의 반환값을 응답으로 보냅니다. `None`이 돌아오�
 - 확인 못 함:
   - 기본 RMW(Fast DDS)에서의 동작. 이 WSL 환경에서는 Fast DDS로 프로세스 사이 통신이 되지 않아서 Cyclone DDS로만 검증했습니다.
   - 학습자의 실제 `~/rosbook_ws`에서의 빌드. 3장 담당자가 만든 `basics`와 `basics_interfaces`의 실제 내용은 보지 않았고, CONVENTIONS 5절의 형태를 같은 모양으로 직접 만들어 검증했습니다.
-  - 서비스 콜백이 `None`을 반환할 때의 정확한 오류 문구 (Q2).
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 결함 수정(2026-10-31): Q2와 4절의 `return response` 삭제 행을 실행 결과에 맞췄습니다. `checks/service_returns_none.sh`에서 콜백이 `None`을 돌려주게 한 서버에 `ros2 service call`을 보내자, 서버는 `rclpy/service.py` 75번 줄의 `raise TypeError()`로 끝나는 트레이스백을 남기고 종료했고, 클라이언트는 `requester: making request: ...`만 출력한 채 10초 동안 응답을 받지 못했습니다.

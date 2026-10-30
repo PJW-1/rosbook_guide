@@ -173,6 +173,8 @@ sequenceDiagram
 
 ### 실습 19-1. 라이브러리부터 단독으로 확인하기
 
+> **미검증 실습**: 문서를 쓸 때 espeak-ng가 설치되어 있지 않아서, wav 파일 생성과 소리 재생을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 하나. `sudo apt install espeak-ng` 를 마친 상태
 
 **직접 입력**:
@@ -555,11 +557,13 @@ ros2 run talk_bot speech_client --ros-args -p sentence:="the robot is ready"
 
 ### 실습 19-6. 파라미터와 끼어들기(preempt) 시험하기
 
+> **미검증 실습**: 문서를 쓸 때 실제 espeak-ng로 이 실습을 실행해 확인하지 못했습니다. 검증 환경에는 espeak-ng가 없어서, 문장 길이에 비례해 기다리는 가짜 espeak-ng로 노드의 동작만 확인했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 세 개. 터미널 1의 서버는 일단 멈춥니다(Ctrl+C).
 
 **직접 입력**:
 
-터미널 1: 음량을 낮추고 wav 파일로 저장하게 해서 서버를 다시 띄웁니다.
+먼저 파라미터를 시험합니다. 터미널 1: 음량을 낮추고 wav 파일로 저장하게 해서 서버를 다시 띄웁니다.
 
 ```bash
 mkdir -p ~/talk_wav
@@ -574,7 +578,15 @@ ros2 run talk_bot speech_client
 ls -l ~/talk_wav
 ```
 
-끼어들기 정책을 시험합니다. 터미널 2와 터미널 3에 아래 명령을 미리 쳐 두고, 터미널 2에서 Enter를 누른 뒤 1초 안에 터미널 3에서 Enter를 누릅니다.
+다음은 끼어들기 정책입니다. 끼어들기는 첫 문장을 말하는 도중에 두 번째 문장이 도착해야 시험할 수 있습니다. 그런데 wav 파일로 저장할 때는 espeak-ng가 소리를 내지 않으므로, 말하는 시간만큼 기다리지 않고 금방 끝날 수 있습니다. 그래서 터미널 1의 서버를 Ctrl+C로 끄고, 이번에는 `wav_dir` 없이 스피커로 말하도록 다시 띄웁니다.
+
+터미널 1:
+
+```bash
+ros2 run talk_bot speech_server --ros-args -p volume:=0.5
+```
+
+터미널 2와 터미널 3에 아래 명령을 미리 쳐 두고, 터미널 2에서 Enter를 누른 뒤 1초 안에 터미널 3에서 Enter를 누릅니다.
 
 터미널 2:
 
@@ -603,7 +615,7 @@ ros2 action send_goal /speak basics_interfaces/action/Talk "{sentence: 'a very l
 **관찰**:
 - `ros2 param get` 이 `Double value is: 0.5` 를 보여 줍니다. `~/talk_wav` 에 `talk_1.wav` 가 생깁니다.
 - `preempt` 가 거짓일 때: 두 번째 클라이언트는 `goal rejected by the server` 경고를 남기고 끝나고, 서버에는 `busy: rejecting new sentence` 가 찍힙니다. 첫 번째 클라이언트는 SUCCEEDED로 끝납니다.
-- `preempt` 가 참일 때: 서버에 `preempted by a newer sentence` 가 찍히고, 첫 번째 클라이언트는 ABORTED, 두 번째 클라이언트는 SUCCEEDED로 끝납니다. 끊긴 문장의 wav 파일은 만들어지지 않습니다.
+- `preempt` 가 참일 때: 서버에 `preempted by a newer sentence` 가 찍히고, 첫 번째 클라이언트는 ABORTED, 두 번째 클라이언트는 SUCCEEDED로 끝납니다.
 - `ros2 action send_goal` 도중 Ctrl+C를 누르면 `Canceling goal...` 이 찍히고 서버에 `canceled by client` 가 찍힙니다. 이때 명령줄 도구가 `Executor is already spinning` 이라는 메시지를 함께 출력할 수 있습니다. 서버 로그로 취소가 처리되었는지 확인합니다.
 - `-r __node:=client2` 는 노드 이름을 바꾸는 재매핑(remapping: 실행할 때 이름을 바꿔 연결하는 기능)입니다. 같은 이름의 노드 두 개가 동시에 뜨지 않게 하려고 씁니다.
 
@@ -678,3 +690,4 @@ ros2 action send_goal /speak basics_interfaces/action/Talk "{sentence: 'a very l
   - 5장의 `basics_interfaces` 실제 파일 목록과 함께 빌드한 결과.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 수정(2026-10-30): 실습 19-2의 CMake 블록에 5장에서 넣은 `DEPENDENCIES builtin_interfaces` 줄이 빠져 있어서 다시 넣었습니다. 블록을 그대로 덮어쓰면 5장에서 배운 의존 선언이 사라지기 때문입니다. `Complex.msg`, `WordCount.srv`, `Timer.action`, `Talk.action` 네 파일을 함께 빌드하는 경우를 이 줄이 있을 때와 없을 때 모두 시험했습니다. 둘 다 빌드되었고, Python에서 네 타입을 모두 import할 수 있었습니다. 위 "확인 못 함"의 마지막 항목은 이 시험으로 확인했습니다.
+- 결함 수정(2026-10-31): 실습 19-6이 `wav_dir`를 준 서버로 끼어들기와 취소까지 시험하던 순서를 고쳤습니다. 검증에 쓴 가짜 espeak-ng는 문장 길이에 비례해 기다렸지만, 실제 espeak-ng는 `-w`로 파일에 저장할 때 소리를 내지 않으므로 말하는 시간만큼 걸리지 않을 수 있습니다. 그러면 첫 문장이 두 번째 문장보다 먼저 끝나 끼어들기를 볼 수 없습니다. 그래서 파라미터와 wav 파일 확인은 `wav_dir`를 준 서버로, 끼어들기와 취소는 `wav_dir` 없이 다시 띄운 서버로 나눴습니다. "끊긴 문장의 wav 파일은 만들어지지 않는다"는 관찰은 지웠습니다. 가짜 스크립트에서만 확인한 내용이고, 실제 espeak-ng가 중간에 끊겼을 때 파일을 어떻게 남기는지는 확인하지 않았기 때문입니다. 실제 espeak-ng 없이 확인할 수 없는 실습 19-1과 19-6에 미검증 실습 표시를 붙였습니다.
