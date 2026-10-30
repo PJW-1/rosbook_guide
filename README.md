@@ -86,7 +86,7 @@ ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
 | 18 | 나만의 로봇팔 | [ch18_robot_arm.md](ch18_robot_arm.md) | 339~366 | 대부분 미검증 (6/7) |
 | 19 | 소프트웨어 라이브러리 붙이기 | [ch19_software_library.md](ch19_software_library.md) | 367~376 | 일부 미검증 (2/6) |
 | 20 | 도구 | [ch20_tools.md](ch20_tools.md) | 379~394 | 일부 미검증 (1/8) |
-| 21 | 로봇 동작 디버깅 | [ch21_debugging.md](ch21_debugging.md) | 395~418 | 일부 미검증 (5/8) |
+| 21 | 로봇 동작 디버깅 | [ch21_debugging.md](ch21_debugging.md) | 395~418 | 일부 미검증 (6/8) |
 | 22 | ROS 커뮤니티 | [ch22_community.md](ch22_community.md) | 419~424 | 검증됨 (0/4) |
 | 23 | ROS 2에서 C++ 쓰기 | [ch23_cpp.md](ch23_cpp.md) | 425~435 | 검증됨 (0/5) |
 | 부록 | 이 가이드의 실습 환경(WSL2) 메모 | [appendix_wsl_environment.md](appendix_wsl_environment.md) | 해당 없음 | 해당 없음 |

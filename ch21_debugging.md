@@ -634,6 +634,8 @@ ros2 run rqt_bag rqt_bag ~/wave_bag
 
 ### 실습 21-8. 사례 연구: 출력 없이 멈추는 CLI
 
+> **미검증 실습**: 문서를 쓸 때 이 사례 연구의 4번 포트 실험(닫힌 localhost 포트에 접속하면 거절되지 않고 기다리는 동작과, `tcp_syn_retries`로 정해지는 약 2분 17초의 시간 초과)을 다시 실행해 확인하지 못했고, 가이드를 만들면서 기록해 둔 결과를 옮겼습니다. 직접 입력하는 명령으로 보는 `except ConnectionRefusedError: return False`와 `base_port = 11511`은 확인했고, daemon이 없는 도메인에서 `ros2 node list`가 20초 안에 끝나지 않는 증상은 `checks/domain_no_daemon.sh`로 다시 확인했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 읽기 실습입니다. 이 가이드를 만드는 동안 실제로 겪은 문제를 원서의 순서(로그, 연결, 데이터)로 좁혀 간 기록입니다.
 
 **증상**: WSL2(`networkingMode=mirrored`)에서 `ros2 node list`, `ros2 action list` 같은 명령이 아무것도 출력하지 않고 멈췄습니다. 기다리면 약 2분 17초 뒤에 Python Traceback을 내고 끝났습니다. 같은 시간에 노드끼리의 통신은 정상이었습니다.
@@ -763,9 +765,9 @@ ROS 배포판(Jazzy), OS(Ubuntu 24.04 on WSL2), WSL 네트워크 모드(`network
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
 - 결함 수정(2026-10-31):
   - 실습 21-7 해설과 1절 실무 메모의 `--all-topics`(줄여서 `-a`)를 고쳤습니다. 설치된 `ros2bag/verb/record.py` 에서 `-a` 는 토픽과 서비스를 모두 기록하는 `--all` 의 줄임이고, `--all-topics` 에는 줄임 옵션이 없습니다.
-  - 실습 21-4 (1)의 "경고 없음"을 두 RMW에서 다시 확인했습니다. `checks/type_mismatch_warning.sh` 에서 String 발행자와 Int32 구독자를 다른 프로세스로 띄우자 Cyclone DDS와 Fast DDS 모두 `incompatible type` 경고가 0줄, 수신이 0건이었습니다. 두 경우 모두 그래프 조회에는 발행자 `std_msgs/msg/String`, 구독자 `std_msgs/msg/Int32` 가 보였으므로, 서로를 발견하지 못해서 생긴 결과는 아닙니다. 같은 프로세스 안에서 둘을 만들면 Cyclone DDS는 역시 조용했고, Fast DDS는 구독을 만드는 단계에서 `create_subscription() called for existing topic name rt/tm with incompatible type` 오류를 냈습니다.
+  - 실습 21-4 (1)의 "경고 없음"을 두 RMW에서 다시 확인했습니다. `checks/type_mismatch_warning.sh` 에서 String 발행자와 Int32 구독자를 다른 프로세스로 띄우자 Cyclone DDS와 Fast DDS 모두 `incompatible type` 경고가 0줄, 수신이 0건이었습니다. 두 경우 모두 발행자 프로세스의 그래프 조회에는 구독자 `std_msgs/msg/Int32` 가, 구독자 프로세스의 그래프 조회에는 발행자 `std_msgs/msg/String` 이 보였으므로, 서로를 발견하지 못해서 생긴 결과는 아닙니다. 세 번 실행해 모두 같았습니다. 같은 프로세스 안에서 둘을 만들면 Cyclone DDS는 역시 조용했고, Fast DDS는 구독을 만드는 단계에서 `create_subscription() called for existing topic name rt/tm with incompatible type` 오류를 냈습니다.
   - README에 있던 환경 설명이 `appendix_wsl_environment.md` 로 옮겨져서 1절과 실습 21-8의 참조를 바꿨습니다.
   - 실습 21-3의 rqt_graph 체크 상자 이름("Dead sinks", "Leaf topics")과 처음에 켜져 있는 상태는 설치된 `rqt_graph/resource/RosGraph.ui` 와 `rqt_graph/ros_graph.py` 에서 확인했습니다. 화면을 띄워 보지는 않았습니다.
-- 미검증 표시(2026-10-31): GUI를 띄워야 하는 실습 21-2(rqt_console), 21-3(rqt_graph), 21-5(rqt_plot, PlotJuggler), 21-6(Gazebo, rviz2), 21-7(rqt_bag)에 미검증 실습 표시를 붙였고, 4절의 `enable_logger_service` 삭제 행, 노드 종료 행, `use_sim_time` 불일치 행에 (미검증)을 붙였습니다.
+- 미검증 표시(2026-10-31): GUI를 띄워야 하는 실습 21-2(rqt_console), 21-3(rqt_graph), 21-5(rqt_plot, PlotJuggler), 21-6(Gazebo, rviz2), 21-7(rqt_bag)과, 포트 실험을 다시 실행하지 않은 실습 21-8에 미검증 실습 표시를 붙였고, 4절의 `enable_logger_service` 삭제 행, 노드 종료 행, `use_sim_time` 불일치 행에 (미검증)을 붙였습니다.
 
 </details>
