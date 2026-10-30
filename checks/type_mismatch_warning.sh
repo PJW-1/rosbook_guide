@@ -77,8 +77,9 @@ class Both(Node):
     def __init__(self):
         super().__init__('tm_both')
         self.pub = self.create_publisher(String, 'tm', 10)
+        print('both: publisher created', flush=True)
         self.sub = self.create_subscription(Int32, 'tm', lambda msg: None, 10)
-        print('both: created', flush=True)
+        print('both: subscription created', flush=True)
         self.timer = self.create_timer(0.2, lambda: self.pub.publish(String(data='hi')))
 
 
@@ -122,17 +123,19 @@ for rmw in rmw_cyclonedds_cpp rmw_fastrtps_cpp; do
   info "$rmw, 한 프로세스: incompatible type 이 들어간 줄 ${w_both}개"
   grep -ih "incompatible type" "$CHECK_TMP/both_$rmw.log" | head -2
   # 21장 7절이 적은 동작: Cyclone DDS 는 한 프로세스에서도 조용하고, Fast DDS 는 구독을 만드는 단계에서 오류를 냅니다.
-  created=$(grep -c "both: created" "$CHECK_TMP/both_$rmw.log")
+  pub_made=$(grep -c "both: publisher created" "$CHECK_TMP/both_$rmw.log")
+  sub_made=$(grep -c "both: subscription created" "$CHECK_TMP/both_$rmw.log")
+  sub_err=$(grep -cF "create_subscription() called for existing topic name rt/tm with incompatible type" "$CHECK_TMP/both_$rmw.log")
   if [ "$rmw" = rmw_cyclonedds_cpp ]; then
-    if [ "$created" -eq 1 ] && [ "$w_both" -eq 0 ]; then
+    if [ "$pub_made" -eq 1 ] && [ "$sub_made" -eq 1 ] && [ "$w_both" -eq 0 ]; then
       pass "$rmw, 한 프로세스: 경고 없이 발행자와 구독을 모두 만듦"
     else
-      fail "$rmw, 한 프로세스: 생성 완료 ${created}번, incompatible type ${w_both}줄"
+      fail "$rmw, 한 프로세스: 발행자 생성 ${pub_made}번, 구독 생성 ${sub_made}번, incompatible type ${w_both}줄"
     fi
-  elif [ "$created" -eq 0 ] && [ "$w_both" -ge 1 ]; then
-    pass "$rmw, 한 프로세스: 구독을 만드는 단계에서 incompatible type 오류"
+  elif [ "$pub_made" -eq 1 ] && [ "$sub_made" -eq 0 ] && [ "$sub_err" -ge 1 ]; then
+    pass "$rmw, 한 프로세스: 발행자는 만들고, 구독을 만드는 단계에서 incompatible type 오류"
   else
-    fail "$rmw, 한 프로세스: 생성 완료 ${created}번, incompatible type ${w_both}줄"
+    fail "$rmw, 한 프로세스: 발행자 생성 ${pub_made}번, 구독 생성 ${sub_made}번, create_subscription 오류 ${sub_err}줄"
   fi
 done
 finish

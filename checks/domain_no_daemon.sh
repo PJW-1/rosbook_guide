@@ -16,9 +16,19 @@ daemon_pids() {
     fi
   done
 }
-# 이미 떠 있던 daemon 은 다른 곳에서 쓰고 있을 수 있으므로 끝날 때 끄지 않습니다.
-daemons_before=$(daemon_pids)
-if [ -n "$daemons_before" ]; then
+# --no-daemon 없이 실행하는 명령에만 ROSBOOK_CHECK_OWNER 를 붙입니다. 그 명령이 daemon 을 띄우면 daemon 이
+# 이 환경 변수를 물려받으므로, 끝날 때(중간에 멈춰도) 이 표시가 있는 daemon 만 끕니다. 다른 곳에서 띄운 daemon 은 그대로 둡니다.
+stop_own_daemons() {
+  local pid
+  for pid in $(daemon_pids); do
+    if tr '\0' '\n' < "/proc/$pid/environ" 2> /dev/null | grep -qx "ROSBOOK_CHECK_OWNER=$$"; then
+      kill "$pid"
+    fi
+  done
+}
+trap 'stop_own_daemons; cleanup' EXIT
+
+if [ -n "$(daemon_pids)" ]; then
   info "도메인 57 에 이미 daemon 이 있으므로, --no-daemon 없이 실행한 결과는 daemon 이 없을 때의 동작이 아님"
 fi
 
@@ -37,7 +47,7 @@ else
 fi
 
 start=$(date +%s)
-timeout 20 ros2 node list > "$CHECK_TMP/daemon_path.log" 2>&1
+ROSBOOK_CHECK_OWNER=$$ timeout 20 ros2 node list > "$CHECK_TMP/daemon_path.log" 2>&1
 rc=$?
 elapsed=$(($(date +%s) - start))
 if [ "$rc" -eq 124 ]; then
@@ -46,10 +56,4 @@ else
   info "--no-daemon 없이 실행한 명령이 ${elapsed}초 만에 끝남 (rc=$rc)"
 fi
 
-# --no-daemon 없이 실행한 명령이 도메인 57 에 daemon 을 새로 띄웠다면 그것만 끕니다.
-for pid in $(daemon_pids); do
-  if ! echo "$daemons_before" | grep -qx "$pid"; then
-    kill "$pid"
-  fi
-done
 finish

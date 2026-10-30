@@ -17,7 +17,7 @@ bash checks/run_all.sh
 - 확인한 항목마다 `PASS:` 또는 `FAIL:`을, 판정 없이 기록만 하는 정보는 `INFO:`를 출력합니다. 마지막 줄은 `ALL PASS` 또는 실패 개수입니다.
 - 작업 폴더는 `/tmp/rosbook_check.XXXXXX`로 새로 만들고 끝날 때 지웁니다. `~/rosbook_ws`는 건드리지 않습니다.
 - 기본 도메인을 피해 스크립트마다 다른 `ROS_DOMAIN_ID`(56~67)를 쓰므로, 실행 중인 다른 노드와 섞이지 않습니다.
-- daemon은 스크립트가 띄운 것만 끝날 때 끕니다. 이미 떠 있던 daemon은 다른 곳에서 쓰고 있을 수 있으므로 그대로 둡니다.
+- daemon은 스크립트가 띄운 것만 끝날 때 끄며, 중간에 멈춘 경우에도 끕니다. 다른 곳에서 띄운 daemon은 쓰고 있을 수 있으므로 그대로 둡니다.
 - RMW는 `RMW_IMPLEMENTATION`이 비어 있으면 Cyclone DDS를 씁니다. `type_mismatch_warning.sh`만 Cyclone DDS와 Fast DDS를 모두 씁니다.
 - 패키지를 임시로 빌드하는 스크립트가 있어서, 모두 실행하면 몇 분 걸립니다.
 
