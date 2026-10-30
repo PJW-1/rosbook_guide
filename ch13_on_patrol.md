@@ -172,6 +172,8 @@ outcome = sm.execute()
 
 ### 실습 13-1. Nav2 액션을 명령줄로 다뤄 보기
 
+> **미검증 실습**: 문서를 쓸 때 Gazebo, Nav2, rviz2를 띄운 상태에서 `send_goal`과 피드백을 보는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 9~10장에서 저장한 지도 파일 이름을 확인합니다. 9장에서 저장한 이름대로 `MAP=~/rosbook_ws/maps/tb3_world.yaml`로 적었으니, 다른 이름으로 저장했다면 그 이름으로 바꿉니다. 터미널 4개를 씁니다.
 
 **직접 입력**:
@@ -208,6 +210,8 @@ ros2 action send_goal --feedback /navigate_to_pose nav2_msgs/action/NavigateToPo
 1. `send_goal` 도중 Ctrl+C를 누르면 로봇은 어떻게 됩니까? 액션의 어떤 기능 때문입니까?
 
 ### 실습 13-2. 순찰 지점 고르기
+
+> **미검증 실습**: 문서를 쓸 때 rviz2의 Publish Point로 순찰 지점을 고르는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 13-1의 시뮬과 Nav2가 실행 중입니다.
 
@@ -502,6 +506,8 @@ ros2 param set /fake_nav succeed true
 
 ### 실습 13-5. smach로 만드는 첫 상태 기계
 
+> **미검증 실습**: 문서를 쓸 때 smach로 만든 첫 상태 기계(`simple_fsm`)의 실행 결과를 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: smach를 설치합니다. 시뮬은 필요 없습니다.
 ```bash
 sudo apt install ros-jazzy-smach ros-jazzy-smach-ros
@@ -572,6 +578,8 @@ ros2 run patrol simple_fsm
 1. ONE 상태의 `transitions`에서 `'finished': 'finished'`를 빼면 어떻게 됩니까?
 
 ### 실습 13-6. 상태 기계 안에 상태 기계 넣기
+
+> **미검증 실습**: 문서를 쓸 때 smach로 만든 중첩 상태 기계(`shapes`)의 실행 결과를 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 13-5와 같습니다.
 
@@ -653,6 +661,8 @@ ros2 run patrol shapes
 1. `Drive`가 장애물을 만나 `blocked`라는 결과를 낼 수 있게 하려면, 어떤 곳들을 함께 고쳐야 합니까?
 
 ### 실습 13-7. 상태 기계로 순찰하기
+
+> **미검증 실습**: 문서를 쓸 때 smach로 만든 순찰 상태 기계(`patrol_fsm`)의 실행 결과를 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 1에서 `ros2 run patrol fake_nav`가 실행 중입니다. (나중에는 실제 Nav2로 바꿉니다.)
 
@@ -754,12 +764,12 @@ grep -n bt_xml $(ros2 pkg prefix turtlebot3_navigation2)/share/turtlebot3_naviga
 
 | 바꿀 것 | 예상 증상 | 원인을 확인하는 명령 |
 |---|---|---|
-| 액션 이름 오타: `ros2 run patrol patrol --ros-args -r navigate_to_pose:=navigate_to_poses` | `waiting for navigate_to_pose server...`에서 영원히 멈춤. 로그에는 원래 이름이 찍혀서 오타가 보이지 않음 | `ros2 action list -t`, `ros2 node info /patrol` (Action Clients의 실제 이름) |
-| 타입 불일치: `ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateThroughPoses "{}"` | 서버를 찾지 못하고 기다리기만 함. 같은 이름이어도 타입이 다르면 연결되지 않음 | `ros2 action info -t /navigate_to_pose`, `ros2 action list -t` |
-| 노드 종료: patrol이 목표를 기다리는 중에 fake_nav를 Ctrl+C | patrol이 결과 future를 계속 기다리며 멈춤. fake_nav를 다시 실행해도 이전 목표의 결과는 오지 않음 | `ros2 action info /navigate_to_pose` (서버 0개), `ros2 node list` |
-| QoS 불일치: Nav2 실행 중 `ros2 topic echo /map --qos-durability volatile --qos-reliability reliable` | 지도는 처음 한 번만 발행되는 transient local 토픽이므로 volatile 구독자에게는 아무것도 오지 않음 | `ros2 topic info -v /map` (publisher의 Durability: TRANSIENT_LOCAL) |
-| `use_sim_time` 누락: `navigation2.launch.py`를 `use_sim_time:=True` 없이 실행 | TF 시간이 맞지 않아 "extrapolation" 경고가 반복되고, 목표가 거절되거나 로봇이 움직이지 않음 | `ros2 param get /bt_navigator use_sim_time`, `ros2 topic echo --once /clock` |
-| 환경 변수 누락: `TURTLEBOT3_MODEL` 없이 `navigation2.launch.py` 실행 | launch가 시작하자마자 `KeyError: 'TURTLEBOT3_MODEL'`로 끝남 | `echo $TURTLEBOT3_MODEL` |
+| 액션 이름 오타: `ros2 run patrol patrol --ros-args -r navigate_to_pose:=navigate_to_poses` | `waiting for navigate_to_pose server...`에서 영원히 멈춤. 로그에는 원래 이름이 찍혀서 오타가 보이지 않음 (미검증) | `ros2 action list -t`, `ros2 node info /patrol` (Action Clients의 실제 이름) |
+| 타입 불일치: `ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateThroughPoses "{}"` | 서버를 찾지 못하고 기다리기만 함. 같은 이름이어도 타입이 다르면 연결되지 않음 (미검증) | `ros2 action info -t /navigate_to_pose`, `ros2 action list -t` |
+| 노드 종료: patrol이 목표를 기다리는 중에 fake_nav를 Ctrl+C | patrol이 결과 future를 계속 기다리며 멈춤. fake_nav를 다시 실행해도 이전 목표의 결과는 오지 않음 (미검증) | `ros2 action info /navigate_to_pose` (서버 0개), `ros2 node list` |
+| QoS 불일치: Nav2 실행 중 `ros2 topic echo /map --qos-durability volatile --qos-reliability reliable` | 지도는 처음 한 번만 발행되는 transient local 토픽이므로 volatile 구독자에게는 아무것도 오지 않음 (미검증) | `ros2 topic info -v /map` (publisher의 Durability: TRANSIENT_LOCAL) |
+| `use_sim_time` 누락: `navigation2.launch.py`를 `use_sim_time:=True` 없이 실행 | TF 시간이 맞지 않아 "extrapolation" 경고가 반복되고, 목표가 거절되거나 로봇이 움직이지 않음 (미검증) | `ros2 param get /bt_navigator use_sim_time`, `ros2 topic echo --once /clock` |
+| 환경 변수 누락: `TURTLEBOT3_MODEL` 없이 `navigation2.launch.py` 실행 | launch가 시작하자마자 `KeyError: 'TURTLEBOT3_MODEL'`로 끝남 (미검증) | `echo $TURTLEBOT3_MODEL` |
 
 ## 5. 확인 질문
 
@@ -832,3 +842,4 @@ smach는 상태의 결과가 전이 표에 없으면 상태 기계 결과 목록
   - Gazebo, Nav2, rviz2를 띄운 모든 관찰(확인 못 함(GUI)): 13-1의 send_goal과 피드백, 13-2의 Publish Point, 실제 로봇 순찰.
   - 4절의 액션 이름 오타, 타입 불일치, 노드 종료, `/map` QoS, `use_sim_time` 누락 증상은 실행하지 않은 예상입니다. `TURTLEBOT3_MODEL` 누락의 `KeyError`는 launch 파일 코드를 읽어 판단했습니다.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 미검증 표시(2026-10-31): 실습 13-1, 13-2, 13-5, 13-6, 13-7에 미검증 실습 표시를 붙였고, 4절의 모든 행(6개)에 (미검증)을 붙였습니다.

@@ -167,6 +167,9 @@ ls wander_bot wander_bot/wander_bot
 **생각해 볼 질문**: `--dependencies`에 `sensor_msgs`를 빠뜨리면 빌드는 될까요? 무엇이 문제가 될까요? (Q1)
 
 ### 실습 7-2. red_light_green_light: 시간으로 멈춤과 전진 바꾸기
+
+> **미검증 실습**: 문서를 쓸 때 Gazebo 시뮬에서 로봇이 3초 전진하고 3초 정지하는 동작을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 실습 7-1의 패키지.
 
 **직접 입력**: `~/rosbook_ws/src/wander_bot/wander_bot/red_light_green_light.py`
@@ -288,6 +291,9 @@ grep -n -A 25 'hls_lfcd_lds' $SDF | grep -E 'sensor|pose|update_rate|topic|sampl
 **생각해 볼 질문**: 정면 근처 ±15도를 보려면 어떤 인덱스들을 봐야 하나요? 인덱스가 음수가 되는 부분은 어떻게 처리할까요? (Q3)
 
 ### 실습 7-4. range_ahead: 정면 거리 읽기
+
+> **미검증 실습**: 문서를 쓸 때 range_ahead 노드를 시뮬에 붙여 실행하는 부분(시뮬에서 `index 0 / 360`이 나오는 관찰 항목)을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 실습 7-2까지 빌드된 상태.
 
 **직접 입력**: `~/rosbook_ws/src/wander_bot/wander_bot/range_ahead.py`
@@ -369,6 +375,9 @@ ros2 run wander_bot range_ahead --ros-args -p use_sim_time:=true
 **생각해 볼 질문**: 같은 코드가 두 센서에서 서로 다른 인덱스를 고르는데도 둘 다 정면을 가리킵니다. 원서의 "가운데 인덱스" 방식과 비교해 어떤 점이 나은가요? (Q4)
 
 ### 실습 7-5. wander: 피하면서 돌아다니기
+
+> **미검증 실습**: 문서를 쓸 때 시뮬에서 로봇이 기둥 앞에서 멈추고 돌아서는 동작과 rqt_graph 화면을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 실습 7-4까지 빌드된 상태.
 
 **직접 입력**: `~/rosbook_ws/src/wander_bot/wander_bot/wander.py`
@@ -497,9 +506,9 @@ ros2 run rqt_graph rqt_graph --ros-args -p use_sim_time:=true
 |---|---|---|
 | `wander.py`의 publisher 타입을 `Twist`로 바꾸고(가져오기, 생성, `msg.twist.` 접근도 맞춰 수정) 시뮬에서 실행 | 로봇이 움직이지 않습니다. 오류 메시지도 없습니다. | `ros2 topic list -t`에 `/cmd_vel [geometry_msgs/msg/Twist, geometry_msgs/msg/TwistStamped]`, `ros2 topic info -v /cmd_vel`에서 노드별 타입 |
 | subscriber 토픽 이름을 `'scan'`에서 `'scna'`로 오타 | 로그가 `spin` 없이 계속 전진하고 30초마다만 돕니다. 기둥에 부딪힙니다. | `ros2 node info /wander`의 Subscribers에 `/scna`, `ros2 topic info /scna`의 Publisher count: 0 |
-| 시뮬 실행 중 `wander`를 Ctrl-C로 종료 | 마지막 명령 이후 로봇이 어떻게 되는지 관찰합니다. 이 노드는 종료할 때 정지 명령을 보내지 않습니다. | `ros2 topic hz /cmd_vel`(publisher가 사라짐), Gazebo 화면 |
+| 시뮬 실행 중 `wander`를 Ctrl-C로 종료 | 마지막 명령 이후 로봇이 어떻게 되는지 관찰합니다. 이 노드는 종료할 때 정지 명령을 보내지 않습니다. (미검증) | `ros2 topic hz /cmd_vel`(publisher가 사라짐), Gazebo 화면 |
 | QoS 불일치: `range_ahead`의 QoS는 그대로 두고, 가짜 publisher를 `ros2 topic pub -r 5 --qos-reliability best_effort /scan ...`로 띄운 뒤 `ros2 topic echo /scan --qos-reliability reliable` | `range_ahead`는 받지만 reliable echo는 아무것도 받지 못하고 "offering incompatible QoS ... RELIABILITY" 경고를 냅니다. | `ros2 topic info -v /scan`의 각 Reliability |
-| 반대로 `range_ahead.py`의 QoS를 `10`(기본 RELIABLE)으로 바꾸고 위의 best_effort 가짜 publisher 사용 | `range_ahead`가 아무 로그도 내지 않습니다. | `ros2 topic info -v /scan` |
+| 반대로 `range_ahead.py`의 QoS를 `10`(기본 RELIABLE)으로 바꾸고 위의 best_effort 가짜 publisher 사용 | `range_ahead`가 아무 로그도 내지 않습니다. (미검증) | `ros2 topic info -v /scan` |
 | 시뮬에서 `use_sim_time` 없이 `wander` 실행 | 겉보기에는 동작하지만 `/cmd_vel`의 stamp가 벽시계입니다. Gazebo를 일시정지해도 상태 전환 타이머가 계속 흘러 회전 시간이 어긋납니다. | `ros2 topic echo /cmd_vel --field header.stamp`와 `ros2 topic echo /clock --once` 비교 |
 | `use_sim_time:=true`를 주고 시뮬 없이 실행 | 노드는 살아 있지만 `/cmd_vel`이 하나도 나오지 않습니다. `/clock`이 없어 시계가 0에 멈춰 타이머가 돌지 않기 때문입니다. | `ros2 topic hz /cmd_vel`, `ros2 topic info /clock` |
 
@@ -561,3 +570,4 @@ Waffle Pi는 1도 간격이므로 정면 인덱스 0을 중심으로 -15~+15입�
   - rqt_graph 화면: 확인 못 함(GUI).
   - "QoS를 10으로 바꾼 range_ahead가 best_effort publisher를 못 받는다"는 행은 위 reliable echo 결과에서 유추했습니다. 노드 코드를 바꾼 실행은 하지 않았습니다.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 미검증 표시(2026-10-31): 실습 7-2, 7-4, 7-5에 미검증 실습 표시를 붙였고, 4절의 `wander` Ctrl-C 종료 행과 `range_ahead` QoS를 10으로 바꾸는 행에 (미검증)을 붙였습니다.

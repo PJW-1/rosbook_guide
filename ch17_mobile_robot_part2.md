@@ -288,6 +288,8 @@ check_urdf /tmp/tortoisebot.urdf
 
 ### 실습 17-3. 연습장 월드에서 레이저 확인하기
 
+> **미검증 실습**: 문서를 쓸 때 rviz2에서 `LaserScan` 디스플레이로 연습장의 기둥과 벽을 보는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 원서는 Willow Garage 사무실을 쓰지만, 여기서는 이미 설치된 TurtleBot3 연습장 모델과 그 지도를 씁니다.
 
 **준비**: 터미널 3개.
@@ -408,6 +410,8 @@ cd ~/rosbook_ws && colcon build --symlink-install --packages-select tortoisebot
 
 ### 실습 17-5. Nav2 띄우고 위치 알려 주기, 목표 보내기
 
+> **미검증 실습**: 문서를 쓸 때 rviz2의 "2D Pose Estimate"와 "Nav2 Goal" 도구를 조작하는 부분과 Gazebo, rviz2 화면을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 원서 PDF p.333~336의 rviz 사용법을 rviz2와 명령줄 두 가지로 합니다.
 
 **준비**: 터미널 4개. 첫 터미널에서 17-3의 `sim.launch.py`(연습장 월드, `x:=-2.0 y:=-0.5`)가 실행 중입니다.
@@ -442,7 +446,7 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose \
 
 | 줄 | 설명 |
 |---|---|
-| `bringup_launch.py` | map_server, amcl(위치 추정)과 planner, controller, bt_navigator 등(내비게이션)을 한 번에 띄웁니다. 기본으로 한 프로세스(`nav2_container`)에 컴포넌트로 올립니다. |
+| `bringup_launch.py` | map_server, amcl(위치 추정)과 planner, controller, bt_navigator 등(내비게이션)을 한 번에 띄웁니다. 기본으로 한 프로세스(`nav2_container`)에 컴포넌트로 올립니다(컴포넌트는 2장 1절과 실습 2-10에서 다룹니다). |
 | `use_sim_time:=true` | 이 런치의 기본값은 `false`입니다. 시뮬과 함께 쓸 때는 반드시 켭니다. |
 | `map:=.../tb3_sandbox.yaml` | 연습장 월드에 맞춰 미리 만든 지도입니다. 해상도 0.05 m, 원점 (-10, -10)입니다. |
 | `params_file:=...` | 17-4에서 고친 파일입니다. 설치 폴더가 아니라 소스 폴더의 파일을 바로 주었습니다. |
@@ -500,12 +504,12 @@ grep -A4 'cmd_vel' $(ros2 pkg prefix nav2_minimal_tb3_sim)/share/nav2_minimal_tb
 
 | 바꿀 것 | 예상 증상 | 원인을 확인하는 명령 |
 |---|---|---|
-| 브리지 yaml의 `cmd_vel` 타입을 `geometry_msgs/msg/TwistStamped`로 바꾸고 17-5를 다시 실행 | 경로는 rviz2에 그려지지만 로봇이 움직이지 않고, 목표는 진척이 없어 결국 실패합니다. | `ros2 topic info -v /cmd_vel`에서 publisher(`collision_monitor`, Twist)와 subscriber(`ros_gz_bridge`, TwistStamped)의 타입을 비교합니다. |
-| `laser.xacro`의 `<topic>scan</topic>`을 `<topic>laser</topic>`으로 바꾸기 | `/scan` 토픽은 브리지 때문에 목록에 있지만 데이터가 오지 않습니다. amcl이 위치를 고치지 못하고 코스트맵에 장애물이 나타나지 않습니다. | `gz topic -l`, `ros2 topic hz /scan` |
-| `nav2_params.yaml`의 `robot_base_frame` 한 곳을 `base_footprnt`로 오타 | 해당 코스트맵이 변환을 기다린다는 로그를 반복하고, lifecycle 활성화가 끝나지 않습니다. | Nav2 터미널 로그, `ros2 lifecycle get /local_costmap/local_costmap`, `view_frames` |
-| `bringup_launch.py`를 `use_sim_time:=true` 없이 실행 | 벽시계 시각과 시뮬 시각이 달라 변환 시점이 맞지 않는다는(extrapolation) 오류가 반복되고 코스트맵이 준비되지 않습니다. | `ros2 param get /amcl use_sim_time`, `ros2 topic echo --once /clock` |
-| `robot_radius`를 0.5로 키우기 | 연습장 기둥 사이 좁은 길로는 경로를 찾지 못하고, 목표가 장애물 근처면 계획 실패가 납니다. | rviz2의 코스트맵 표시, Nav2 터미널의 planner 로그 |
-| Nav2 실행 중에 `sim.launch.py` 터미널에서 Ctrl+C | `/clock`이 멈춰 Nav2 전체의 시간이 멈추고, 변환이 오래되었다는 경고가 납니다. | `ros2 topic hz /clock`, `ros2 node list` |
+| 브리지 yaml의 `cmd_vel` 타입을 `geometry_msgs/msg/TwistStamped`로 바꾸고 17-5를 다시 실행 | 경로는 rviz2에 그려지지만 로봇이 움직이지 않고, 목표는 진척이 없어 결국 실패합니다. (미검증) | `ros2 topic info -v /cmd_vel`에서 publisher(`collision_monitor`, Twist)와 subscriber(`ros_gz_bridge`, TwistStamped)의 타입을 비교합니다. |
+| `laser.xacro`의 `<topic>scan</topic>`을 `<topic>laser</topic>`으로 바꾸기 | `/scan` 토픽은 브리지 때문에 목록에 있지만 데이터가 오지 않습니다. amcl이 위치를 고치지 못하고 코스트맵에 장애물이 나타나지 않습니다. (미검증) | `gz topic -l`, `ros2 topic hz /scan` |
+| `nav2_params.yaml`의 `robot_base_frame` 한 곳을 `base_footprnt`로 오타 | 해당 코스트맵이 변환을 기다린다는 로그를 반복하고, lifecycle 활성화가 끝나지 않습니다. (미검증) | Nav2 터미널 로그, `ros2 lifecycle get /local_costmap/local_costmap`, `view_frames` |
+| `bringup_launch.py`를 `use_sim_time:=true` 없이 실행 | 벽시계 시각과 시뮬 시각이 달라 변환 시점이 맞지 않는다는(extrapolation) 오류가 반복되고 코스트맵이 준비되지 않습니다. (미검증) | `ros2 param get /amcl use_sim_time`, `ros2 topic echo --once /clock` |
+| `robot_radius`를 0.5로 키우기 | 연습장 기둥 사이 좁은 길로는 경로를 찾지 못하고, 목표가 장애물 근처면 계획 실패가 납니다. (미검증) | rviz2의 코스트맵 표시, Nav2 터미널의 planner 로그 |
+| Nav2 실행 중에 `sim.launch.py` 터미널에서 Ctrl+C | `/clock`이 멈춰 Nav2 전체의 시간이 멈추고, 변환이 오래되었다는 경고가 납니다. (미검증) | `ros2 topic hz /clock`, `ros2 node list` |
 
 ## 5. 확인 질문
 
@@ -575,3 +579,4 @@ amcl의 입자(particle)들이 틀린 곳에 퍼지고, 레이저 점이 지도 
   - 4절의 증상은 모두 예상이며 재현하지 않았습니다.
   - `empty.sdf`에 Sensors 시스템이 들어 있는지는 확인하지 않았습니다(17-2 해설에 "않을 수 있으므로"로 적음).
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 미검증 표시(2026-10-31): 실습 17-3, 17-5에 미검증 실습 표시를 붙였고, 4절의 모든 행(6개)에 (미검증)을 붙였습니다.

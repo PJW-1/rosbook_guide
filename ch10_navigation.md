@@ -475,6 +475,8 @@ ros2 action send_goal --feedback /navigate_to_pose nav2_msgs/action/NavigateToPo
 
 ### 실습 10-2. Nav2 띄우고 구조 살펴보기
 
+> **미검증 실습**: 문서를 쓸 때 Nav2 전체 스택을 띄운 상태에서 보는 관찰 항목(`ros2 component list` 출력, lifecycle 상태, rqt_graph, rviz2 화면)을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 4개. 9장의 SLAM, 텔레옵, map_server는 모두 끕니다. 특히 **텔레옵이 켜져 있으면** Nav2와 같은 `/cmd_vel`에 명령을 보내 서로 싸우므로 반드시 끕니다.
 
 **직접 입력**:
@@ -515,7 +517,7 @@ rqt_graph
 **관찰**:
 
 - `ros2 lifecycle nodes`에 map_server, amcl, bt_navigator, planner_server, controller_server, behavior_server, velocity_smoother, collision_monitor, waypoint_follower 등이 나옵니다. 처음 몇 초는 상태가 `inactive`나 `unconfigured`일 수 있고, lifecycle manager가 순서대로 activate합니다.
-- `ros2 component list`에 `/nav2_container`가 있고 그 아래 여러 노드가 들어 있습니다. `bringup_launch.py`의 `use_composition` 기본값이 `True`라서, Nav2 노드들이 프로세스 하나 안의 컴포넌트로 실행됩니다 (2장의 composition). `ros2 node list`로는 따로 실행한 노드와 구별되지 않습니다.
+- `ros2 component list`에 `/nav2_container`가 있고 그 아래 여러 노드가 들어 있습니다. `bringup_launch.py`의 `use_composition` 기본값이 `True`라서, Nav2 노드들이 프로세스 하나 안의 컴포넌트로 실행됩니다 (2장 1절과 실습 2-10에서 본 composition). `ros2 node list`로는 따로 실행한 노드와 구별되지 않습니다.
 - `ros2 node info /amcl`:
   - Subscribers: `/initialpose`, `/map`, `/scan`, `/tf`, `/tf_static`
   - Publishers: `/amcl_pose: geometry_msgs/msg/PoseWithCovarianceStamped`, `/particle_cloud: nav2_msgs/msg/ParticleCloud`, `/tf`
@@ -532,6 +534,8 @@ rqt_graph
 **생각해 볼 질문**: `/cmd_vel`을 바로 내지 않고 velocity_smoother와 collision_monitor를 거치게 나눈 이유는 무엇일까요?
 
 ### 실습 10-3. AMCL에 초기 위치 알려 주기
+
+> **미검증 실습**: 문서를 쓸 때 초기 위치를 준 뒤 `map → odom` 변환이 나오는 것과 파티클이 수렴하는 모습을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 실습 10-2를 켠 상태. 터미널 2개 추가.
 
@@ -579,6 +583,8 @@ rviz2에서 Add → By topic → `/particle_cloud`를 추가하면(TurtleBot3 rv
 
 ### 실습 10-4. rviz2에서 목표 보내기
 
+> **미검증 실습**: 문서를 쓸 때 rviz2의 Nav2 Goal로 목표를 보내 로봇이 주행하는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 실습 10-3까지 마친 상태.
 
 **직접 입력**: rviz2 툴바의 **Nav2 Goal**을 누르고, 지도 위 빈 곳을 클릭한 채 도착 방향으로 끌었다 놓습니다. 그동안 다른 터미널에서 다음을 봅니다.
@@ -601,6 +607,8 @@ ros2 topic hz /cmd_vel
 **생각해 볼 질문**: 기둥 안쪽처럼 갈 수 없는 곳(costmap에서 막힌 칸)을 목표로 찍으면 Nav2는 어떻게 응답할까요?
 
 ### 실습 10-5. 순찰 노드로 Nav2 움직이기
+
+> **미검증 실습**: 문서를 쓸 때 `patrol` 노드가 실제 Nav2에 목표를 보내 로봇이 주행하는 부분과 기본 목표 좌표 (4.0, 1.0)이 빈 공간인지를 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 실습 10-3까지 마친 상태 (초기 위치가 잡혀 있어야 합니다).
 
@@ -629,6 +637,8 @@ ros2 run nav_bot patrol --ros-args -p use_sim_time:=true -p waypoints:="[4.0, 1.
 **생각해 볼 질문**: 순찰 중에 Ctrl-C로 `patrol`을 끄면 로봇은 멈출까요? 액션의 "목표"는 누가 가지고 있을까요?
 
 ### 실습 10-6. nav2_simple_commander와 비교하기
+
+> **미검증 실습**: 문서를 쓸 때 `patrol_commander`를 Nav2와 함께 실행하는 부분(빌드와 lint만 통과했습니다)을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 Nav2에는 액션 클라이언트를 감싼 파이썬 도우미 `nav2_simple_commander`가 있습니다. 같은 순찰을 이것으로 쓰면 어떻게 달라지는지 봅니다.
 
@@ -714,12 +724,12 @@ ros2 run nav_bot patrol_commander --ros-args -p use_sim_time:=true
 | `patrol`에 `waypoints:="[1, 2, 0]"` (소수점 없음) | 시작하자마자 `InvalidParameterTypeException ... 'INTEGER_ARRAY', expecting type 'DOUBLE_ARRAY'`로 종료 | 오류 메시지. 기본값이 실수 배열이라 파라미터 타입이 고정됨 |
 | `patrol.py`의 `frame_id`를 `'odom'`으로 바꾸고 10-1 가짜 서버에 보냄 | "목표가 거절되었습니다" 후 종료. 서버 쪽에 `frame_id='odom' 목표를 거절합니다` | 명령으로 같은 실험: `ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{pose: {header: {frame_id: odom}}}"` → `Goal was rejected.` |
 | `ActionClient`의 이름을 `'navigate_to_pos'`로 오타 | "navigate_to_pose 액션 서버를 기다립니다"가 끝없이 반복 | `ros2 action list`, `ros2 node info /patrol`의 Action Clients 이름 |
-| 실습 10-2를 `use_sim_time:=True` 없이 실행 | tf가 미래/과거 시각이라는 경고가 반복되고, costmap이 비어 있거나 로봇이 움직이지 않음 | `ros2 param get /amcl use_sim_time`, `ros2 topic echo /clock --once`와 `/scan`의 header 시각 비교 |
-| 실습 10-3 전에(초기 위치 없이) Nav2 Goal을 보냄 | 목표가 실패하거나 계획이 만들어지지 않음. `map` 프레임이 없다는 경고 | `ros2 run tf2_ros tf2_echo map odom --ros-args -p use_sim_time:=true` |
-| `patrol`을 `use_sim_time` 없이 실행해 Nav2에 목표 전송 | 목표의 시각이 시뮬 시각보다 수십 년 앞섬. tf 변환 시각 관련 경고나 실패가 생길 수 있음 | `ros2 param get /patrol use_sim_time`, bt_navigator 로그 |
-| 실습 10-2에서 텔레옵을 켠 채로 목표 전송 | 로봇이 덜컥거리거나 엉뚱하게 움직임 | `ros2 topic info -v /cmd_vel` → publisher가 2개 (collision_monitor, teleop) |
-| 순찰 중 `ros2 lifecycle set /controller_server deactivate` | 로봇이 멈추고 목표가 실패 처리됨. patrol에 실패 로그 | `ros2 lifecycle get /controller_server`, patrol 출력의 `error_code` |
-| `/amcl_pose`를 VOLATILE로 늦게 구독: `ros2 topic echo /amcl_pose --once --qos-durability volatile --qos-reliability reliable` | 로봇이 서 있으면 아무것도 오지 않음 (amcl은 움직일 때 새로 냄) | 기본 `ros2 topic echo /amcl_pose --once`와 비교 (기본값은 publisher QoS에 맞춰 TRANSIENT_LOCAL로 받음) |
+| 실습 10-2를 `use_sim_time:=True` 없이 실행 | tf가 미래/과거 시각이라는 경고가 반복되고, costmap이 비어 있거나 로봇이 움직이지 않음 (미검증) | `ros2 param get /amcl use_sim_time`, `ros2 topic echo /clock --once`와 `/scan`의 header 시각 비교 |
+| 실습 10-3 전에(초기 위치 없이) Nav2 Goal을 보냄 | 목표가 실패하거나 계획이 만들어지지 않음. `map` 프레임이 없다는 경고 (미검증) | `ros2 run tf2_ros tf2_echo map odom --ros-args -p use_sim_time:=true` |
+| `patrol`을 `use_sim_time` 없이 실행해 Nav2에 목표 전송 | 목표의 시각이 시뮬 시각보다 수십 년 앞섬. tf 변환 시각 관련 경고나 실패가 생길 수 있음 (미검증) | `ros2 param get /patrol use_sim_time`, bt_navigator 로그 |
+| 실습 10-2에서 텔레옵을 켠 채로 목표 전송 | 로봇이 덜컥거리거나 엉뚱하게 움직임 (미검증) | `ros2 topic info -v /cmd_vel` → publisher가 2개 (collision_monitor, teleop) |
+| 순찰 중 `ros2 lifecycle set /controller_server deactivate` | 로봇이 멈추고 목표가 실패 처리됨. patrol에 실패 로그 (미검증) | `ros2 lifecycle get /controller_server`, patrol 출력의 `error_code` |
+| `/amcl_pose`를 VOLATILE로 늦게 구독: `ros2 topic echo /amcl_pose --once --qos-durability volatile --qos-reliability reliable` | 로봇이 서 있으면 아무것도 오지 않음 (amcl은 움직일 때 새로 냄) (미검증) | 기본 `ros2 topic echo /amcl_pose --once`와 비교 (기본값은 publisher QoS에 맞춰 TRANSIENT_LOCAL로 받음) |
 
 ## 5. 확인 질문
 
@@ -783,3 +793,4 @@ planner_server가 경로를 찾지 못해 실패를 알리고, bt_navigator는 �
   - `patrol_commander`는 빌드와 lint만 통과. 실행은 amcl이 필요해 확인하지 못함.
   - 4절 표 중 `use_sim_time` 누락, 초기 위치 없이 목표 전송, 텔레옵 충돌, controller_server 비활성화, `/amcl_pose` VOLATILE 실험의 실제 출력.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 미검증 표시(2026-10-31): 실습 10-2~10-6에 미검증 실습 표시를 붙였고, 4절의 `use_sim_time` 누락 두 행, 초기 위치 없이 목표 전송 행, 텔레옵 충돌 행, controller_server 비활성화 행, `/amcl_pose` VOLATILE 행에 (미검증)을 붙였습니다. 실습 10-2의 composition 참조를 "2장 1절과 실습 2-10에서 본 composition"으로 고쳤습니다.

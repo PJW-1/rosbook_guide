@@ -717,6 +717,8 @@ ros2 interface show control_msgs/action/SingleJointPosition
 
 ### 실습 15-8. rviz2로 거리 센서 보기 (선택, GUI)
 
+> **미검증 실습**: 문서를 쓸 때 rviz2 화면에서 보는 관찰 항목을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 3개. 첫 터미널에서 `ros2 run sensors_actuators sonar_driver`.
 
 **직접 입력**:
@@ -744,8 +746,8 @@ rviz2에서 Fixed Frame을 `map`으로 바꾸고, Add 버튼으로 `Range` 디�
 |---|---|---|
 | `sonar_driver` 실행 중에 `ros2 topic echo --qos-durability transient_local /range` | echo가 아무것도 받지 못하고, 양쪽에 `incompatible QoS ... Last incompatible policy: DURABILITY` 경고가 찍힙니다. | `ros2 topic info -v /range`로 publisher의 Durability가 `VOLATILE`인지 봅니다. |
 | `ros2 topic pub /servo/command std_msgs/msg/Float32 "{data: 0.5}"` | `Waiting for at least 1 matching subscription(s)...`만 반복되고 서보가 움직이지 않습니다. | `ros2 topic info /servo/command`로 타입이 `Float64`인지 봅니다. 이름이 같아도 타입이 다르면 연결되지 않습니다. |
-| `sonar_stream_driver.py`에서 `with self.lock:` 두 곳을 지우기 | 이 예제에서는 대입 하나뿐이라 증상이 거의 보이지 않습니다. 값 여러 개를 같이 갱신하는 장치라면 섞인 값이 나올 수 있습니다. | 증상이 드물게 나타나는 종류의 버그입니다. 코드 리뷰로 찾아야 한다는 점을 기억해 둡니다. |
-| `ros2 run sensors_actuators sonar_driver --ros-args -p frame_id:=sonar_lnik` | 토픽은 잘 나오지만 15-8의 rviz2에서 Range가 그려지지 않고 변환이 없다는 상태가 뜹니다. | `ros2 topic echo --once /range --field header.frame_id`, `ros2 run tf2_ros tf2_echo map sonar_lnik` |
+| `sonar_stream_driver.py`에서 `with self.lock:` 두 곳을 지우기 | 이 예제에서는 대입 하나뿐이라 증상이 거의 보이지 않습니다. 값 여러 개를 같이 갱신하는 장치라면 섞인 값이 나올 수 있습니다. (미검증) | 증상이 드물게 나타나는 종류의 버그입니다. 코드 리뷰로 찾아야 한다는 점을 기억해 둡니다. |
+| `ros2 run sensors_actuators sonar_driver --ros-args -p frame_id:=sonar_lnik` | 토픽은 잘 나오지만 15-8의 rviz2에서 Range가 그려지지 않고 변환이 없다는 상태가 뜹니다. (미검증) | `ros2 topic echo --once /range --field header.frame_id`, `ros2 run tf2_ros tf2_echo map sonar_lnik` |
 | `servo_driver` 실행 중에 그 터미널에서 Ctrl+C | `/servo/joint_states`가 끊기고, 명령 pub은 구독자를 기다립니다. | `ros2 node list`, `ros2 topic info /servo/command` |
 
 ## 5. 확인 질문
@@ -836,3 +838,4 @@ Range 디스플레이가 오류 상태가 되고, `sonar_link`에서 `map`으로
   - 15-8의 rviz2 화면(GUI), 4절 넷째 줄의 rviz2 표시.
   - 4절 셋째 줄(lock 제거)의 증상은 재현을 시도하지 않았습니다.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 미검증 표시(2026-10-31): 실습 15-8에 미검증 실습 표시를 붙였고, 4절의 lock 제거 행과 `frame_id` 오타 행에 (미검증)을 붙였습니다.

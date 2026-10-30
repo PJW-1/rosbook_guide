@@ -220,6 +220,8 @@ Node ← ArmClient (arm.py: move_to_pose, set_gripper, add_object ...)
 
 ### 실습 11-1. Panda 데모를 띄우고 구조 보기
 
+> **미검증 실습**: 문서를 쓸 때 MoveIt Panda 데모(`demo.launch.py`)를 실행하는 부분과 rviz2, rqt_graph 화면을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 위의 apt 패키지를 설치하고 새 터미널을 엽니다.
 
 **직접 입력**: 터미널 A
@@ -255,6 +257,8 @@ ros2 node info /move_group
 
 ### 실습 11-2. 조인트, 링크, tf 연결 확인
 
+> **미검증 실습**: 문서를 쓸 때 MoveIt 데모에서 조인트와 링크 이름, tf 연결을 확인하는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 A에서 데모가 실행 중입니다.
 
 **직접 입력**: 터미널 B
@@ -284,6 +288,8 @@ ros2 param get /robot_state_publisher robot_description | head -20
 
 ### 실습 11-3. rviz2에서 계획하고 실행하기
 
+> **미검증 실습**: 문서를 쓸 때 rviz2의 MotionPlanning 패널에서 계획하고 실행하는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 A의 데모와 rviz2 창.
 
 **직접 입력**: rviz2의 MotionPlanning 패널에서 다음을 합니다.
@@ -307,6 +313,8 @@ ros2 topic echo /joint_states --field position
 3. rviz2의 Plan & Execute 버튼과 이 장에서 만들 Python 노드는 move_group 입장에서 무엇이 같습니까?
 
 ### 실습 11-4. 명령줄에서 MoveGroup 액션 보내기
+
+> **미검증 실습**: 문서를 쓸 때 MoveGroup 액션을 명령줄로 보내는 부분(YAML, 액션 이름, 오류 코드 값)을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 A의 데모.
 
@@ -353,6 +361,8 @@ ros2 action send_goal --feedback /move_action moveit_msgs/action/MoveGroup "{
 4. `start_state: {is_diff: true}`를 빼면 어떤 상태에서 출발하는 계획이 됩니까?
 
 ### 실습 11-5. 패키지를 만들고 손끝을 좌표로 보내기
+
+> **미검증 실습**: 문서를 쓸 때 `chess_bot` 패키지를 MoveIt 데모에 연결해 손끝을 좌표로 보내는 부분(패키지 빌드와 테스트는 확인했습니다)을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 A의 데모.
 
@@ -623,6 +633,8 @@ ros2 run chess_bot arm_cli 0.4 0.0 0.5 3.1416 0 0
 
 ### 실습 11-6. 자주 쓰는 자세에 별명 붙이기
 
+> **미검증 실습**: 문서를 쓸 때 별명 함수로 MoveIt 데모의 팔을 움직이는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 실습 11-5 빌드 완료.
 
 **직접 입력**: 파일: `~/rosbook_ws/src/chess_bot/chess_bot.bash`
@@ -653,6 +665,8 @@ armleft
 6. 이 별명들은 `.bashrc`에 넣지 않았습니다. 새 터미널에서 `armhigh`를 쓰면 어떻게 됩니까?
 
 ### 실습 11-7. 그리퍼 열고 닫기
+
+> **미검증 실습**: 문서를 쓸 때 MoveIt 데모에서 그리퍼를 열고 닫는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 A의 데모.
 
@@ -727,6 +741,8 @@ ros2 topic echo --once /joint_states --field position
 7. `GRIPPER_OPENINGS['close']`를 0.012로 둔 이유를 말의 반지름(실습 11-8의 `PIECE_RADIUS`)과 연결해 설명해 보십시오.
 
 ### 실습 11-8. 체스판을 플래닝 씬에 올리기
+
+> **미검증 실습**: 문서를 쓸 때 체스판을 플래닝 씬에 올리고 rviz2와 `/monitored_planning_scene`에서 확인하는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 A의 데모.
 
@@ -894,6 +910,8 @@ ros2 topic echo --once /monitored_planning_scene --field world.collision_objects
 
 ### 실습 11-9. 칸 이름으로 손 보내기
 
+> **미검증 실습**: 문서를 쓸 때 칸 이름으로 MoveIt 데모의 팔을 보내는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 A의 데모, 실습 11-8의 체스판.
 
 **직접 입력**: 파일: `~/rosbook_ws/src/chess_bot/chess_bot/chessboard_cli.py`
@@ -970,6 +988,8 @@ ros2 run tf2_ros tf2_echo panda_link0 panda_hand
 9. 높이 0을 주면 왜 계획이 실패합니까? 플래닝 씬과 연결해 답해 보십시오.
 
 ### 실습 11-10. 유명한 기보 재현하기
+
+> **미검증 실습**: 문서를 쓸 때 오페라 게임을 MoveIt 데모의 팔로 재현하는 부분(기보 해석은 테스트로 확인했지만, 전체 소요 시간과 각 칸에서 IK가 풀리는지는 확인하지 못했습니다)을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 A의 데모. 체스판이 이미 있다면 데모를 다시 띄워 깨끗한 씬에서 시작합니다.
 
@@ -1192,16 +1212,16 @@ ros2 run chess_bot chess_playback $(ros2 pkg prefix chess_bot)/share/chess_bot/g
 
 | 바꿀 것 | 예상 증상 | 원인을 확인하는 명령 |
 |---|---|---|
-| `arm.py`의 `ARM_GROUP`을 `panda_arms`로 바꿈 | 목표가 거절되거나 오류 코드로 끝납니다. move_group 로그에 그룹을 찾을 수 없다는 메시지가 납니다. | 터미널 A의 move_group 로그, `ros2 param get /move_group robot_description_semantic \| grep "group name"` |
-| 실습 11-4 명령의 `panda_joint1`을 `panda_jiont1`로 바꿈 (조인트 이름 오타) | 계획이 실패하고 결과 `error_code`가 SUCCESS(1)가 아닙니다. | `ros2 topic echo --once /joint_states --field name`, `ros2 interface show moveit_msgs/msg/MoveItErrorCodes` |
-| `ros2 control set_controller_state panda_arm_controller inactive` | 계획은 성공하지만 실행 단계에서 실패합니다. 컨트롤러가 목표를 받지 않기 때문입니다. | `ros2 control list_controllers`, `ros2 action info /panda_arm_controller/follow_joint_trajectory` |
-| `ros2 control set_controller_state joint_state_broadcaster inactive` | `/joint_states`가 멈춥니다. move_group은 현재 상태를 모른다고 경고하고 계획이 실패하거나, rviz2의 팔이 실제와 다른 자세에 멈춰 보입니다. | `ros2 topic hz /joint_states`, `ros2 topic info -v /joint_states` |
-| 터미널 A의 데모를 Ctrl+C로 끈 뒤 `arm_cli` 실행 (노드 종료) | 10초 뒤 `action server move_action not found` 오류. | `ros2 action list -t`, `ros2 node list` |
-| `chessboard_cli e2 -0.05` (판 속으로 들어가는 높이) | 목표 자세가 판과 충돌해 계획 실패. | move_group 로그, rviz2에서 판 표시 확인 |
-| `arm_cli 1.5 0 0.5 3.1416 0 0` (닿지 않는 위치) | IK 해가 없어 계획 실패. | move_group 로그, `ros2 run tf2_ros tf2_echo panda_link0 panda_hand`로 현재 손 위치와 비교 |
-| `arm.py`의 `BASE_FRAME`을 `panda_link_0`으로 바꿈 (tf에 없는 좌표계, 깨진 tf) | 목표의 좌표계를 변환할 수 없어 계획이 실패하고 move_group 로그에 프레임을 찾을 수 없다는 메시지가 납니다. | `ros2 run tf2_tools view_frames`, `ros2 run tf2_ros tf2_echo panda_link_0 panda_hand` |
-| 내 노드만 `ROS_DOMAIN_ID`를 다른 값으로 실행 | `move_action not found`. 같은 컴퓨터여도 도메인이 다르면 서로 보이지 않습니다. | `echo $ROS_DOMAIN_ID`, `ros2 node list` |
-| `arm_cli`를 `--ros-args -p use_sim_time:=true`로 실행 | 이 데모에는 `/clock`이 없으므로 노드 시계가 0에 머뭅니다. 이 장의 코드는 시계를 쓰지 않아 동작은 같지만, 로그 시각이 0 근처로 찍힙니다. 시뮬레이터가 있는 18장에서는 반대로 이 설정을 빠뜨리면 문제가 됩니다. | `ros2 topic list \| grep clock`, `ros2 param get /arm_cli use_sim_time` (실행 중일 때) |
+| `arm.py`의 `ARM_GROUP`을 `panda_arms`로 바꿈 | 목표가 거절되거나 오류 코드로 끝납니다. move_group 로그에 그룹을 찾을 수 없다는 메시지가 납니다. (미검증) | 터미널 A의 move_group 로그, `ros2 param get /move_group robot_description_semantic \| grep "group name"` |
+| 실습 11-4 명령의 `panda_joint1`을 `panda_jiont1`로 바꿈 (조인트 이름 오타) | 계획이 실패하고 결과 `error_code`가 SUCCESS(1)가 아닙니다. (미검증) | `ros2 topic echo --once /joint_states --field name`, `ros2 interface show moveit_msgs/msg/MoveItErrorCodes` |
+| `ros2 control set_controller_state panda_arm_controller inactive` | 계획은 성공하지만 실행 단계에서 실패합니다. 컨트롤러가 목표를 받지 않기 때문입니다. (미검증) | `ros2 control list_controllers`, `ros2 action info /panda_arm_controller/follow_joint_trajectory` |
+| `ros2 control set_controller_state joint_state_broadcaster inactive` | `/joint_states`가 멈춥니다. move_group은 현재 상태를 모른다고 경고하고 계획이 실패하거나, rviz2의 팔이 실제와 다른 자세에 멈춰 보입니다. (미검증) | `ros2 topic hz /joint_states`, `ros2 topic info -v /joint_states` |
+| 터미널 A의 데모를 Ctrl+C로 끈 뒤 `arm_cli` 실행 (노드 종료) | 10초 뒤 `action server move_action not found` 오류. (미검증) | `ros2 action list -t`, `ros2 node list` |
+| `chessboard_cli e2 -0.05` (판 속으로 들어가는 높이) | 목표 자세가 판과 충돌해 계획 실패. (미검증) | move_group 로그, rviz2에서 판 표시 확인 |
+| `arm_cli 1.5 0 0.5 3.1416 0 0` (닿지 않는 위치) | IK 해가 없어 계획 실패. (미검증) | move_group 로그, `ros2 run tf2_ros tf2_echo panda_link0 panda_hand`로 현재 손 위치와 비교 |
+| `arm.py`의 `BASE_FRAME`을 `panda_link_0`으로 바꿈 (tf에 없는 좌표계, 깨진 tf) | 목표의 좌표계를 변환할 수 없어 계획이 실패하고 move_group 로그에 프레임을 찾을 수 없다는 메시지가 납니다. (미검증) | `ros2 run tf2_tools view_frames`, `ros2 run tf2_ros tf2_echo panda_link_0 panda_hand` |
+| 내 노드만 `ROS_DOMAIN_ID`를 다른 값으로 실행 | `move_action not found`. 같은 컴퓨터여도 도메인이 다르면 서로 보이지 않습니다. (미검증) | `echo $ROS_DOMAIN_ID`, `ros2 node list` |
+| `arm_cli`를 `--ros-args -p use_sim_time:=true`로 실행 | 이 데모에는 `/clock`이 없으므로 노드 시계가 0에 머뭅니다. 이 장의 코드는 시계를 쓰지 않아 동작은 같지만, 로그 시각이 0 근처로 찍힙니다. 시뮬레이터가 있는 18장에서는 반대로 이 설정을 빠뜨리면 문제가 됩니다. (미검증) | `ros2 topic list \| grep clock`, `ros2 param get /arm_cli use_sim_time` (실행 중일 때) |
 
 ## 5. 확인 질문
 
@@ -1292,3 +1312,4 @@ robot_state_publisher는 새 관절 값을 받지 못하므로 마지막으로 �
   - rviz2, rqt_graph 화면: 확인 못 함(GUI).
   - 오페라 게임 전체 재현에 걸리는 시간과 각 칸에서 IK가 모두 풀리는지: 확인 못 함.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 미검증 표시(2026-10-31): 실습 11-1~11-10 전부에 미검증 실습 표시를 붙였고, 4절의 모든 행(10개)에 (미검증)을 붙였습니다.

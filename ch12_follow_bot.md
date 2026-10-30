@@ -139,6 +139,8 @@ flowchart TB
 
 ### 실습 12-1. 카메라 토픽 살펴보기
 
+> **미검증 실습**: 문서를 쓸 때 Gazebo 시뮬의 카메라 토픽(실제 encoding, 압축 토픽 유무)과 rqt_image_view 화면을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 3개. 터미널 1에서 시뮬을 띄웁니다.
 
 **직접 입력**:
@@ -177,6 +179,8 @@ ros2 run rqt_image_view rqt_image_view /camera/image_raw --ros-args -p use_sim_t
 2. 카메라가 9 cm 높이에서 수평으로 보면, 화면 아래쪽 1/4에는 로봇 앞 어느 정도 거리의 바닥이 보이겠습니까?
 
 ### 실습 12-2. 패키지를 만들고 이미지를 받아 보기
+
+> **미검증 실습**: 문서를 쓸 때 Gazebo 시뮬 카메라가 내보내는 이미지의 encoding(rgb8로 예상)을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 1에서 시뮬이 계속 실행 중입니다.
 
@@ -338,6 +342,8 @@ ros2 run follow_bot check_vision
 1. 하한을 `[0, 0, 0]`, 상한을 `[179, 255, 255]`로 바꾸면 `mask pixels`는 얼마가 되겠습니까?
 
 ### 실습 12-4. 선이 있는 월드와 launch 파일 조립하기
+
+> **미검증 실습**: 문서를 쓸 때 Gazebo에 코스를 띄웠을 때의 모습(코스 모양, 카메라 화면)과 `--show-args` 출력 전체를 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 시뮬은 꺼 둡니다. 이 실습에서는 남이 만든 launch 파일을 include해서 새 launch 파일을 조립합니다.
 
@@ -600,6 +606,8 @@ ros2 launch follow_bot course.launch.py
 
 ### 실습 12-5. 선 검출 결과를 토픽으로 보기
 
+> **미검증 실습**: 문서를 쓸 때 Gazebo 시뮬에서 rqt_image_view와 rqt_graph로 보는 관찰 항목과 압축 토픽 유무를 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 1에서 `ros2 launch follow_bot course.launch.py`가 실행 중입니다.
 
 **직접 입력**:
@@ -701,6 +709,8 @@ ros2 run rqt_graph rqt_graph
 
 ### 실습 12-6. 비례 제어로 선 따라가기
 
+> **미검증 실습**: 문서를 쓸 때 Gazebo에서 로봇이 선을 따라 도는 모습과 `kp` 변화에 따른 주행을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 1에서 `course.launch.py`가 실행 중이고, 로봇이 출발 위치에 있습니다. 로봇이 이미 움직였다면 launch를 다시 시작합니다.
 
 **직접 입력**:
@@ -801,7 +811,7 @@ ros2 param set /follower_p speed 0.0
 | QoS 불일치: `line_finder.py`의 `mask_pub`을 `qos_profile_sensor_data`로 바꾸고, `ros2 run follow_bot follower --ros-args -r camera/image_raw:=follower/mask`로 마스크를 reliable 구독 | follower 로그가 나오지 않고 `New publisher discovered on topic ..., offering incompatible QoS ... RELIABILITY` 경고가 나옴 | `ros2 topic info -v /follower/mask`에서 publisher와 subscriber의 Reliability 비교 |
 | 토픽 이름 오타: `ros2 run follow_bot follower_p --ros-args -r camera/image_raw:=camera/image` | 로봇이 전혀 움직이지 않고 `/cmd_vel`도 나오지 않음 | `ros2 topic info /camera/image` (Publisher count: 0), `ros2 node info /follower_p` |
 | 타입 불일치: `ros2 topic pub -r 2 /cmd_vel geometry_msgs/msg/Twist "{angular: {z: 1.0}}"` | 로봇은 이 명령에 반응하지 않음. 같은 이름의 토픽에 타입이 두 개 생김 | `ros2 topic list -t | grep cmd_vel` (두 타입이 함께 표시), `ros2 topic info -v /cmd_vel` |
-| 노드 종료: 로봇이 달리는 중에 `follower_p`를 Ctrl+C | 마지막으로 받은 속도를 계속 따르는지, 멈추는지 관찰 | `ros2 topic hz /cmd_vel`, `ros2 node list` |
+| 노드 종료: 로봇이 달리는 중에 `follower_p`를 Ctrl+C | 마지막으로 받은 속도를 계속 따르는지, 멈추는지 관찰 (미검증) | `ros2 topic hz /cmd_vel`, `ros2 node list` |
 | `use_sim_time` 누락: `follower_p`를 `-p use_sim_time:=true` 없이 실행하고 `ros2 topic echo /clock`과 비교 | `/cmd_vel`의 `header.stamp`가 시뮬 시각이 아니라 벽시계 시각(큰 값)이 됨 | `ros2 topic echo --once /cmd_vel --field header.stamp`, `ros2 param get /follower_p use_sim_time` |
 | HSV 하한을 H 255 같은 범위 밖 값으로 설정: `ros2 param set /line_finder upper_hsv "[255, 255, 255]"` | H 상한이 179를 넘어도 오류는 없지만 범위 해석이 원래 의도와 달라짐 | `ros2 param get /line_finder upper_hsv`, rqt_image_view로 `/follower/mask` 확인 |
 
@@ -886,3 +896,4 @@ ros2 param set /follower_p speed 0.0
   - 시뮬 카메라의 실제 encoding(`rgb8`으로 예상)과 `image_bridge`가 압축 토픽을 함께 내는지.
   - `ros2 launch ... --show-args` 출력 전체.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 미검증 표시(2026-10-31): 실습 12-1, 12-2, 12-4, 12-5, 12-6에 미검증 실습 표시를 붙였고, 4절의 노드 종료 행에 (미검증)을 붙였습니다.

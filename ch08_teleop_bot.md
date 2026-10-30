@@ -276,6 +276,9 @@ ros2 topic echo /keys
 **생각해 볼 질문**: 이 노드를 `ros2 launch` 파일에 넣거나 `< /dev/null`로 실행하면 어떻게 될까요? (Q1)
 
 ### 실습 8-2. keys_to_twist: 키를 속도로
+
+> **미검증 실습**: 문서를 쓸 때 시뮬에서 로봇을 몰아 보는 부분과 rqt_plot 그래프를 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 실습 8-1의 패키지.
 
 **직접 입력**: `~/rosbook_ws/src/teleop_bot/teleop_bot/keys_to_twist.py`
@@ -634,6 +637,9 @@ ros2 topic pub --once /keys std_msgs/msg/String "{data: w}"
 **생각해 볼 질문**: `linear_accel`을 `0.0`으로 바꾸면 어떻게 될까요? 음수로 바꾸면요? (Q5)
 
 ### 실습 8-6. 시뮬에서 몰아 보기
+
+> **미검증 실습**: 문서를 쓸 때 시뮬에서 로봇을 운전하는 관찰 항목과 노드를 끈 뒤 로봇의 움직임을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 3개. 터미널 1에서 시뮬 실행(`ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py`).
 
 **직접 입력**: 터미널 2
@@ -655,6 +661,9 @@ ros2 run teleop_bot key_publisher
 **생각해 볼 질문**: 터미널 3의 `key_publisher`만 끄면 로봇은 어떻게 될까요? 터미널 2의 노드를 끄면요? (Q6)
 
 ### 실습 8-7. rviz2로 로봇이 보는 것 보기
+
+> **미검증 실습**: 문서를 쓸 때 rviz2 화면에서 보는 관찰 항목(Fixed Frame 오류 표시, RobotModel의 Durability 설정 효과)을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 실습 8-6이 실행 중입니다.
 
 **직접 입력**: 터미널 4
@@ -711,13 +720,13 @@ ros2 topic hz /cmd_vel
 |---|---|---|
 | `keys_to_twist_with_ramps.py`의 메시지를 `Twist`로 바꿔(가져오기, publisher, `.twist` 접근 수정) 시뮬에서 운전 | 키를 눌러도 로봇이 움직이지 않습니다. | `ros2 topic list -t`에서 `/cmd_vel` 타입이 두 개, `ros2 topic info -v /cmd_vel` |
 | `teleop_twist_keyboard`를 `stamped:=true` 없이 실행 | 같은 증상입니다. | 위와 같음 |
-| yaml 첫 줄 노드 이름 오타(`keys_to_twistt`) | 오류 없이 기본값(0.1)이 쓰입니다. | `ros2 param get /keys_to_twist linear_scale` |
+| yaml 첫 줄 노드 이름 오타(`keys_to_twistt`) | 오류 없이 기본값(0.1)이 쓰입니다. (미검증) | `ros2 param get /keys_to_twist linear_scale` |
 | `key_publisher`의 토픽을 `'key'`로 오타 | `keys_to_twist`가 아무 키도 받지 못합니다. | `ros2 node info /keyboard_driver`, `ros2 topic info /keys`의 Publisher count: 0 |
-| 운전 중 `keys_to_twist_with_ramps` 노드를 Ctrl-C로 종료 | 마지막 명령 이후 로봇의 동작을 관찰합니다. 이 노드는 종료 때 정지 명령을 보내지 않습니다. | `ros2 topic hz /cmd_vel`, Gazebo 화면 |
+| 운전 중 `keys_to_twist_with_ramps` 노드를 Ctrl-C로 종료 | 마지막 명령 이후 로봇의 동작을 관찰합니다. 이 노드는 종료 때 정지 명령을 보내지 않습니다. (미검증) | `ros2 topic hz /cmd_vel`, Gazebo 화면 |
 | `ros2 param set /keys_to_twist linear_accel 1` (정수) | `Setting parameter failed: Wrong parameter type ...`이 나오고 값이 그대로입니다. | `ros2 param get /keys_to_twist linear_accel` |
-| QoS 불일치: `ros2 topic echo /keys --qos-durability transient_local` | `key_publisher`(VOLATILE)와 호환되지 않아 echo가 아무것도 받지 못하고 incompatible QoS 경고를 냅니다. | `ros2 topic info -v /keys` |
+| QoS 불일치: `ros2 topic echo /keys --qos-durability transient_local` | `key_publisher`(VOLATILE)와 호환되지 않아 echo가 아무것도 받지 못하고 incompatible QoS 경고를 냅니다. (미검증) | `ros2 topic info -v /keys` |
 | `use_sim_time` 없이 `keys_to_twist_with_ramps`를 시뮬과 함께 실행 | 운전은 되지만 `/cmd_vel` stamp가 벽시계입니다. Gazebo를 일시정지해도 ramp가 계속 진행됩니다. | `ros2 topic echo /cmd_vel --field header.stamp`, `ros2 topic echo /clock --once` |
-| rviz2를 `use_sim_time` 없이 실행 | LaserScan이 안 보이거나 TF 관련 경고(오래된 데이터, 외삽 오류)가 납니다. | rviz2의 Global Status와 각 Display의 Status |
+| rviz2를 `use_sim_time` 없이 실행 | LaserScan이 안 보이거나 TF 관련 경고(오래된 데이터, 외삽 오류)가 납니다. (미검증) | rviz2의 Global Status와 각 Display의 Status |
 
 ## 5. 확인 질문
 <details><summary>Q1. key_publisher를 launch나 리다이렉트로 실행하면?</summary>
@@ -793,3 +802,4 @@ ros2 topic hz /cmd_vel
   - rviz2 화면, Fixed Frame 오류 표시, RobotModel Durability 설정의 효과, rqt_plot 그래프: 확인 못 함(GUI).
   - `--qos-durability transient_local` echo와 `/keys`의 비호환 경고, yaml 노드 이름 오타, `declare_parameter` 생략 시 예외, `linear_accel` 0과 음수의 동작: 확인 못 함(규칙과 코드에서 유추).
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 미검증 표시(2026-10-31): 실습 8-2, 8-6, 8-7에 미검증 실습 표시를 붙였고, 4절의 yaml 노드 이름 오타 행, 운전 중 노드 종료 행, `transient_local` echo 행, rviz2 `use_sim_time` 행에 (미검증)을 붙였습니다.

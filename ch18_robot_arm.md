@@ -401,6 +401,8 @@ ros2 run tf2_ros tf2_echo world hand
 
 ### 실습 18-2. rviz2로 모델 보기
 
+> **미검증 실습**: 문서를 쓸 때 rviz2와 `joint_state_publisher_gui` 슬라이더로 팔을 움직여 보는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 실습 18-1의 터미널 A, B는 Ctrl+C로 끕니다.
 
 **직접 입력**: 파일: `~/rosbook_ws/src/cougarbot/launch/display.launch.py`
@@ -485,6 +487,8 @@ rviz2에서 Fixed Frame을 `world`로 바꾸고, Add 버튼으로 RobotModel(Des
 2. 슬라이더 창을 닫으면 rviz2의 팔은 어떻게 표시됩니까? 그 이유를 `/joint_states`와 연결해 설명해 보십시오.
 
 ### 실습 18-3. ros2_control 태그와 Gazebo 띄우기
+
+> **미검증 실습**: 문서를 쓸 때 `ros2_control`로 컨트롤러를 띄우고 Gazebo에서 팔을 세우는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 실습 18-2의 launch를 끕니다.
 
@@ -667,6 +671,8 @@ ros2 action list -t
 
 ### 실습 18-4. 궤적 보내기: 토픽과 액션
 
+> **미검증 실습**: 문서를 쓸 때 토픽과 액션으로 궤적을 보내 팔을 움직이는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 A에서 `ros2 launch cougarbot gazebo.launch.py` 실행 중.
 
 **직접 입력**: 먼저 메시지 모양을 봅니다.
@@ -700,6 +706,8 @@ ros2 action send_goal --feedback /arm_controller/follow_joint_trajectory control
 
 ### 실습 18-5. tf와 joint_states로 움직임 확인하기
 
+> **미검증 실습**: 문서를 쓸 때 Gazebo, rviz2, `tf2_echo`로 팔의 움직임을 확인하는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 A의 Gazebo launch.
 
 **직접 입력**:
@@ -719,6 +727,8 @@ rviz2에서 Fixed Frame을 `world`로 하고 RobotModel(`/robot_description`)과
 5. 실습 18-2의 `/joint_states`와 지금의 `/joint_states`는 값의 출처가 어떻게 다릅니까?
 
 ### 실습 18-6. MoveIt Setup Assistant로 설정 패키지 만들기
+
+> **미검증 실습**: 문서를 쓸 때 MoveIt Setup Assistant로 설정 패키지를 만드는 부분(MSA 화면과 생성되는 파일)을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: Gazebo launch는 꺼도 됩니다. `cougarbot`이 빌드되어 있어야 합니다.
 
@@ -785,6 +795,8 @@ moveit_simple_controller_manager:
 6. `moveit_controllers.yaml`의 `action_ns`와 컨트롤러 이름을 합치면 어떤 액션 이름이 됩니까? 실습 18-3의 `ros2 action list -t` 출력과 비교해 보십시오.
 
 ### 실습 18-7. Gazebo의 팔을 rviz2에서 계획하고 실행하기
+
+> **미검증 실습**: 문서를 쓸 때 MoveIt으로 Gazebo의 팔을 계획하고 실행하는 부분(`gz_moveit.launch.py` 포함)을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 A에서 `ros2 launch cougarbot gazebo.launch.py` 실행 중.
 
@@ -862,16 +874,16 @@ ros2 action info /arm_controller/follow_joint_trajectory
 
 | 바꿀 것 | 예상 증상 | 원인을 확인하는 명령 |
 |---|---|---|
-| `controllers.yaml`의 `elbow`를 `elbo`로 (조인트 이름 오타) | arm_controller가 활성화되지 못합니다. spawner 로그에 실패가 나고, controller_manager 로그에 요청한 인터페이스 `elbo/position`이 없다는 내용이 납니다. | `ros2 control list_controllers`, `ros2 control list_hardware_interfaces` |
-| `ros2 control set_controller_state arm_controller inactive` | 실습 18-4의 토픽 명령은 아무 반응이 없고, 액션 명령은 서버가 목표를 거절하거나 응답하지 않습니다. MoveIt의 Execute도 실패합니다. | `ros2 control list_controllers`, `ros2 control list_hardware_interfaces` (command interface가 claimed에서 풀림) |
-| 실습 18-4 액션에서 `joint_names: [hip, shoulder]`만 보냄 | 목표가 거부됩니다. JTC는 기본 설정에서 일부 관절만 담은 목표를 받지 않습니다. | `ros2 param get /arm_controller allow_partial_joints_goal`, 결과의 `error_code` |
-| `ros2 run rviz2 rviz2`를 `use_sim_time` 없이 실행 | Gazebo의 시뮬 시각과 벽시계 시각이 크게 달라 tf가 너무 오래되었다는 경고가 나고 팔 모습이 갱신되지 않거나 오류로 표시됩니다. | `ros2 param get /rviz2 use_sim_time`, `ros2 topic echo --once /clock` |
-| `gz_moveit.launch.py`의 move_group에서 `{'use_sim_time': True}`를 뺌 | 계획 시작 시 현재 로봇 상태를 받지 못했다는 경고가 나고 계획이나 실행이 실패합니다. | `ros2 param get /move_group use_sim_time` |
-| Gazebo 창을 닫음 (노드 종료) | `on_exit_shutdown` 때문에 launch 전체가 끝납니다. controller_manager도 Gazebo 안에 있었으므로 같이 사라집니다. | `ros2 node list`, `ros2 control list_controllers` (controller_manager를 찾지 못함) |
-| `gazebo.launch.py`에서 `' use_gazebo:=true'`를 뺌 | Gazebo에 모델은 나타나지만 `<gazebo>` 플러그인 블록이 없어 controller_manager가 뜨지 않습니다. spawner가 계속 기다리다 시간 초과로 끝납니다. | `xacro ... \| grep gz_ros2_control`, `ros2 node list` |
-| 손의 `<inertial>` 블록을 지움 | `check_urdf`는 통과하지만 Gazebo가 질량 없는 링크를 다르게 처리해 손이 사라지거나 손목 조인트가 이상하게 움직일 수 있습니다. | Gazebo 로그, `check_urdf` 출력 비교 |
-| 손목 조인트의 parent를 `lower_armm`으로 바꿈 (깨진 tf) | `check_urdf`가 링크를 찾을 수 없다는 오류를 내고, robot_state_publisher도 모델을 거부합니다. | `xacro ... > /tmp/c.urdf && check_urdf /tmp/c.urdf`, `ros2 run tf2_tools view_frames` |
-| `moveit_controllers.yaml`의 `arm_controller`를 `arm_ctrl`로 바꿈 | 계획은 되지만 Execute 단계에서 move_group이 해당 액션 서버를 찾지 못해 실행 실패. | move_group 로그, `ros2 action list -t` |
+| `controllers.yaml`의 `elbow`를 `elbo`로 (조인트 이름 오타) | arm_controller가 활성화되지 못합니다. spawner 로그에 실패가 나고, controller_manager 로그에 요청한 인터페이스 `elbo/position`이 없다는 내용이 납니다. (미검증) | `ros2 control list_controllers`, `ros2 control list_hardware_interfaces` |
+| `ros2 control set_controller_state arm_controller inactive` | 실습 18-4의 토픽 명령은 아무 반응이 없고, 액션 명령은 서버가 목표를 거절하거나 응답하지 않습니다. MoveIt의 Execute도 실패합니다. (미검증) | `ros2 control list_controllers`, `ros2 control list_hardware_interfaces` (command interface가 claimed에서 풀림) |
+| 실습 18-4 액션에서 `joint_names: [hip, shoulder]`만 보냄 | 목표가 거부됩니다. JTC는 기본 설정에서 일부 관절만 담은 목표를 받지 않습니다. (미검증) | `ros2 param get /arm_controller allow_partial_joints_goal`, 결과의 `error_code` |
+| `ros2 run rviz2 rviz2`를 `use_sim_time` 없이 실행 | Gazebo의 시뮬 시각과 벽시계 시각이 크게 달라 tf가 너무 오래되었다는 경고가 나고 팔 모습이 갱신되지 않거나 오류로 표시됩니다. (미검증) | `ros2 param get /rviz2 use_sim_time`, `ros2 topic echo --once /clock` |
+| `gz_moveit.launch.py`의 move_group에서 `{'use_sim_time': True}`를 뺌 | 계획 시작 시 현재 로봇 상태를 받지 못했다는 경고가 나고 계획이나 실행이 실패합니다. (미검증) | `ros2 param get /move_group use_sim_time` |
+| Gazebo 창을 닫음 (노드 종료) | `on_exit_shutdown` 때문에 launch 전체가 끝납니다. controller_manager도 Gazebo 안에 있었으므로 같이 사라집니다. (미검증) | `ros2 node list`, `ros2 control list_controllers` (controller_manager를 찾지 못함) |
+| `gazebo.launch.py`에서 `' use_gazebo:=true'`를 뺌 | Gazebo에 모델은 나타나지만 `<gazebo>` 플러그인 블록이 없어 controller_manager가 뜨지 않습니다. spawner가 계속 기다리다 시간 초과로 끝납니다. (미검증) | `xacro ... \| grep gz_ros2_control`, `ros2 node list` |
+| 손의 `<inertial>` 블록을 지움 | `check_urdf`는 통과하지만 Gazebo가 질량 없는 링크를 다르게 처리해 손이 사라지거나 손목 조인트가 이상하게 움직일 수 있습니다. (미검증) | Gazebo 로그, `check_urdf` 출력 비교 |
+| 손목 조인트의 parent를 `lower_armm`으로 바꿈 (깨진 tf) | `check_urdf`가 링크를 찾을 수 없다는 오류를 내고, robot_state_publisher도 모델을 거부합니다. (미검증) | `xacro ... > /tmp/c.urdf && check_urdf /tmp/c.urdf`, `ros2 run tf2_tools view_frames` |
+| `moveit_controllers.yaml`의 `arm_controller`를 `arm_ctrl`로 바꿈 | 계획은 되지만 Execute 단계에서 move_group이 해당 액션 서버를 찾지 못해 실행 실패. (미검증) | move_group 로그, `ros2 action list -t` |
 
 ## 5. 확인 질문
 
@@ -942,3 +954,4 @@ ros2 action info /arm_controller/follow_joint_trajectory
   - Gazebo, rviz2, rqt_plot, joint_state_publisher_gui, MoveIt Setup Assistant 화면: 확인 못 함(GUI).
   - MSA가 만드는 파일 이름과 내용(`moveit_controllers.yaml` 모양, CMakeLists의 install, ros2_control 단계 동작), `position_only_ik` 설정, `gz_moveit.launch.py`(moveit_configs_utils 미설치): 확인 못 함.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 미검증 표시(2026-10-31): 실습 18-2~18-7에 미검증 실습 표시를 붙였고, 4절의 모든 행(10개)에 (미검증)을 붙였습니다.

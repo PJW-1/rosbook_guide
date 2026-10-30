@@ -429,6 +429,8 @@ check_urdf /tmp/tortoisebot.urdf
 
 ### 실습 16-4. 바퀴와 캐스터, 그리고 모델 보기
 
+> **미검증 실습**: 문서를 쓸 때 rviz2와 `joint_state_publisher_gui` 슬라이더로 모델을 보는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 원서 PDF p.303~308처럼 바퀴, 충돌 형상, 질량을 더합니다. Gazebo는 `collision`과 `inertial`이 없는 링크를 물리적으로 다룰 수 없으므로 모든 링크에 넣습니다.
 
 **준비**: 터미널 2개. `sudo apt install ros-jazzy-joint-state-publisher-gui`를 마친 상태.
@@ -657,6 +659,8 @@ gz sdf --inertial-stats /tmp/tortoisebot.sdf
 
 ### 실습 16-6. Gazebo에 올리기: DiffDrive, 브리지, spawn
 
+> **미검증 실습**: 문서를 쓸 때 `sim.launch.py`로 Gazebo 창을 띄우는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 원서 PDF p.309~316의 시뮬레이션을 Gazebo Harmonic으로 합니다. 연결은 세 단계입니다. Gazebo 안의 DiffDrive 시스템이 Gazebo 토픽 `cmd_vel`을 받고 `odom`, `tf`를 냅니다. 브리지가 그 Gazebo 토픽과 ROS 토픽을 잇습니다. `create`가 `/robot_description`을 읽어 월드에 로봇을 넣습니다.
 
 **준비**: 16-4의 런치는 멈춥니다.
@@ -836,6 +840,8 @@ gz topic -l
 
 ### 실습 16-7. 운전하기, 그리고 TurtleBot3와 비교하기
 
+> **미검증 실습**: 문서를 쓸 때 `teleop_twist_keyboard`로 운전하는 부분과 Gazebo 창에서 보이는 로봇의 움직임을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 16-6의 `sim.launch.py`가 실행 중입니다.
 
 **직접 입력**:
@@ -882,11 +888,11 @@ grep -A4 'cmd_vel' ~/rosbook_ws/src/tortoisebot/config/tortoisebot_bridge.yaml
 | 바꿀 것 | 예상 증상 | 원인을 확인하는 명령 |
 |---|---|---|
 | 브리지 yaml의 `cmd_vel` 항목 `ros_type_name`을 `geometry_msgs/msg/TwistStamped`로 바꾸고 다시 빌드, 실행 | `Twist`로 보내는 pub과 teleop이 `Waiting for at least 1 matching subscription(s)...`에 머물고 로봇이 움직이지 않습니다. | `ros2 topic info -v /cmd_vel`에서 bridge 쪽 타입을 봅니다. |
-| `tortoisebot_gazebo.xacro`의 `child_frame_id`를 `base_footprnt`로 오타 | `/odom`은 나오지만 좌표 트리가 `odom → base_footprnt`와 `base_footprint → ...`로 갈라집니다. rviz2에서 Fixed Frame `odom`으로 로봇 모델이 보이지 않습니다. | `ros2 run tf2_tools view_frames`, `ros2 run tf2_ros tf2_echo odom base_footprint` |
-| 브리지 yaml에서 `joint_states` 항목 삭제 | rviz2의 RobotModel에서 바퀴와 캐스터에 변환이 없다는 오류가 나고, 몸체만 제자리에 그려집니다. | `ros2 topic list`에서 `/joint_states`가 사라졌는지, `view_frames`에서 바퀴 링크가 없는지 봅니다. |
-| rviz2를 `use_sim_time` 없이 실행 | 시뮬 시각(수십 초)과 벽시계 시각이 크게 달라 변환이 너무 오래되었다는 경고가 나고 모델 표시가 불안정합니다. | `ros2 param get /rviz2 use_sim_time`, `ros2 topic echo --once /clock` |
-| `sim.launch.py` 실행 중에 `fake_base_driver`도 실행 | 두 노드가 같은 `/odom`과 `odom → base_footprint` 변환을 냅니다. 로봇 위치가 두 값 사이에서 튀어 보입니다. | `ros2 topic info /odom`에서 Publisher count가 2인지 봅니다. |
-| `ros2 node list`에서 본 `robot_state_publisher`를 Ctrl+C로 종료 | `create`가 이미 끝났다면 Gazebo 속 로봇은 그대로지만, ROS 쪽에서 바퀴와 몸체 링크 변환이 사라집니다. | `ros2 topic info -v /tf_static`, `view_frames` |
+| `tortoisebot_gazebo.xacro`의 `child_frame_id`를 `base_footprnt`로 오타 | `/odom`은 나오지만 좌표 트리가 `odom → base_footprnt`와 `base_footprint → ...`로 갈라집니다. rviz2에서 Fixed Frame `odom`으로 로봇 모델이 보이지 않습니다. (미검증) | `ros2 run tf2_tools view_frames`, `ros2 run tf2_ros tf2_echo odom base_footprint` |
+| 브리지 yaml에서 `joint_states` 항목 삭제 | rviz2의 RobotModel에서 바퀴와 캐스터에 변환이 없다는 오류가 나고, 몸체만 제자리에 그려집니다. (미검증) | `ros2 topic list`에서 `/joint_states`가 사라졌는지, `view_frames`에서 바퀴 링크가 없는지 봅니다. |
+| rviz2를 `use_sim_time` 없이 실행 | 시뮬 시각(수십 초)과 벽시계 시각이 크게 달라 변환이 너무 오래되었다는 경고가 나고 모델 표시가 불안정합니다. (미검증) | `ros2 param get /rviz2 use_sim_time`, `ros2 topic echo --once /clock` |
+| `sim.launch.py` 실행 중에 `fake_base_driver`도 실행 | 두 노드가 같은 `/odom`과 `odom → base_footprint` 변환을 냅니다. 로봇 위치가 두 값 사이에서 튀어 보입니다. (미검증) | `ros2 topic info /odom`에서 Publisher count가 2인지 봅니다. |
+| `ros2 node list`에서 본 `robot_state_publisher`를 Ctrl+C로 종료 | `create`가 이미 끝났다면 Gazebo 속 로봇은 그대로지만, ROS 쪽에서 바퀴와 몸체 링크 변환이 사라집니다. (미검증) | `ros2 topic info -v /tf_static`, `view_frames` |
 
 ## 5. 확인 질문
 
@@ -956,3 +962,4 @@ Gazebo 속 로봇은 그대로 움직입니다. DiffDrive는 Gazebo 토픽 `cmd_
   - rviz2, `joint_state_publisher_gui`, Gazebo 창 화면(GUI). `sim.launch.py` 자체는 창이 뜨므로 실행하지 않았고, 같은 구성 요소를 따로 띄워 확인했습니다.
   - 4절의 둘째, 셋째, 넷째, 다섯째, 여섯째 줄은 예상 증상이며 재현하지 않았습니다.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 미검증 표시(2026-10-31): 실습 16-4, 16-6, 16-7에 미검증 실습 표시를 붙였고, 4절의 둘째~여섯째 행에 (미검증)을 붙였습니다.
