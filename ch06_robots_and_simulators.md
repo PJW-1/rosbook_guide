@@ -181,6 +181,9 @@ turtlebot3_gazebo/
 ## 3. 실습
 
 ### 실습 6-1. 시뮬을 띄우고 노드와 토픽 목록 보기
+
+> **미검증 실습**: 문서를 쓸 때 Gazebo 창과, Gazebo를 띄운 상태의 `ros2 node list` 목록을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 2개. 둘 다 `~/.bashrc`가 source 된 상태입니다.
 
 **직접 입력** (터미널 1):
@@ -257,6 +260,9 @@ cat /opt/ros/jazzy/share/turtlebot3_gazebo/launch/spawn_turtlebot3.launch.py
 **생각해 볼 질문**: yaml에서 `scan` 항목을 지우고 다시 실행하면 Gazebo의 LiDAR는 계속 동작할까요? ROS에서는 무엇이 달라질까요? (Q3)
 
 ### 실습 6-4. `gz topic -l`과 `ros2 topic list` 비교
+
+> **미검증 실습**: 문서를 쓸 때 `gz topic -l` 전체 출력과 `gz topic -i -t /scan` 출력을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 시뮬 실행 중. 터미널 하나 더.
 
 **직접 입력**:
@@ -275,6 +281,9 @@ gz topic -i -t /scan
 **생각해 볼 질문**: `gz topic -l`에는 있고 `ros2 topic list`에는 없는 토픽을 하나 고르고, ROS에서 보이게 하려면 무엇을 바꿔야 하는지 설명해 보세요. (Q4)
 
 ### 실습 6-5. `/clock`과 `use_sim_time`
+
+> **미검증 실습**: 문서를 쓸 때 Gazebo를 띄운 상태의 `/clock` 관찰과 일시정지 때의 동작을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 시뮬 실행 중.
 
 **직접 입력**:
@@ -295,6 +304,9 @@ ros2 param get /ros_gz_bridge use_sim_time
 **생각해 볼 질문**: 내가 만든 노드를 `use_sim_time` 없이 실행하면, 그 노드가 메시지에 찍은 `header.stamp`와 `/scan`의 `header.stamp`는 어떤 관계가 될까요? (Q5)
 
 ### 실습 6-6. `/tf`, `/tf_static`, `/robot_description`
+
+> **미검증 실습**: 문서를 쓸 때 시뮬에서 본 `/tf` publisher 목록, `tf2_echo odom base_scan` 값, `view_frames` PDF를 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 시뮬 실행 중.
 
 **직접 입력**:
@@ -310,13 +322,17 @@ ros2 run tf2_tools view_frames
 **관찰**:
 - `/tf_static`의 publisher는 `robot_state_publisher` 하나이고 Durability가 `TRANSIENT_LOCAL`입니다. `/tf`의 publisher는 `robot_state_publisher`(바퀴 관절)와 `ros_gz_bridge`(Gazebo DiffDrive가 계산한 odom→base_footprint) 둘입니다.
 - `/tf_static`의 frame_id가 `/base_footprint`, `/base_link`처럼 앞에 `/`가 붙어 있습니다. `robot_state_publisher.launch.py`가 `frame_prefix` 파라미터를 `/`로 넘기기 때문입니다(`ros2 param get /robot_state_publisher frame_prefix`로 확인). tf2는 이 앞 슬래시를 무시하고 이름을 맞추므로 `tf2_echo odom base_scan`은 정상으로 동작합니다.
-- `tf2_echo odom base_scan`의 Translation은 로봇이 원점 근처에 정지해 있으면 x 성분이 생성 위치(-2.0)에 LiDAR 오프셋(-0.064)을 더한 값 근처입니다. z는 약 0.132입니다(base_footprint→base_link 0.010 + base_link→base_scan 0.122).
+- `tf2_echo odom base_scan`의 Translation은 시뮬을 띄운 뒤 로봇을 움직이지 않았다면 `[-0.064, 0.000, 0.132]` 근처입니다. DiffDrive는 시작할 때의 위치를 0으로 두고 바퀴 회전을 적분하므로, `odom` 좌표에서 로봇은 (0, 0)에서 출발합니다. 그래서 이 값은 base_footprint에서 base_scan까지의 고정 오프셋과 같습니다. x는 LiDAR 오프셋 -0.064이고, z는 0.132입니다(base_footprint→base_link 0.010 + base_link→base_scan 0.122).
+- 이와 별개로 `odom` 원점 자체는 Gazebo 월드 좌표에서 로봇을 생성한 위치에 놓입니다. `turtlebot3_world.launch.py`가 넘기는 기본값은 `x_pose` -2.0, `y_pose` -0.5입니다. 따라서 Gazebo 창의 월드 좌표로는 로봇이 (-2.0, -0.5) 근처에 있지만, `odom` 좌표로는 (0, 0) 근처에 있습니다. `spawn_turtlebot3.launch.py`는 생성할 때 방향(yaw)을 주지 않으므로 두 좌표계의 축 방향은 같습니다. 로봇을 움직이면 두 좌표가 같은 양만큼 바뀌고, 바퀴 미끄러짐이 쌓이면 조금씩 어긋납니다.
 - `view_frames`는 현재 디렉터리에 `frames_<날짜>.pdf`를 만듭니다. 트리의 뿌리가 `odom`이고 그 아래에 `base_footprint`, `base_link`, 센서 프레임들이 달린 구조를 확인합니다.
 - `/robot_description`의 내용은 `<robot name="turtlebot3_waffle_pi">`로 시작하는 URDF XML입니다. URDF에는 `odom` 프레임이 없습니다. `odom`은 Gazebo의 DiffDrive가 `/tf`로 만들어 냅니다.
 
 **생각해 볼 질문**: 시뮬을 띄우고 1분 뒤에 `ros2 topic echo /tf_static --once`를 실행해도 값이 바로 나옵니다. `/tf`와 무엇이 다를까요? (Q6)
 
 ### 실습 6-7. rqt_graph로 전체 그림 보기
+
+> **미검증 실습**: 문서를 쓸 때 rqt_graph 화면을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 시뮬 실행 중.
 
 **직접 입력**:
@@ -333,10 +349,10 @@ ros2 run rqt_graph rqt_graph --ros-args -p use_sim_time:=true
 |---|---|---|
 | 시뮬 실행 중 `ros2 topic pub -r 5 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.2}}"` (TwistStamped 대신 Twist) | 로봇이 움직이지 않습니다. 같은 토픽에 타입이 두 개 생깁니다. | `ros2 topic list -t`에 `/cmd_vel [geometry_msgs/msg/Twist, geometry_msgs/msg/TwistStamped]`, `ros2 topic info /cmd_vel`의 Type 목록, `ros2 topic echo /cmd_vel`은 "more than one type" 오류 |
 | 토픽 이름 오타: `ros2 topic pub -r 5 /cmd_vell geometry_msgs/msg/TwistStamped "{twist: {linear: {x: 0.2}}}"` | 로봇이 움직이지 않습니다. 오류도 없습니다. | `ros2 topic info /cmd_vell`의 Subscription count: 0 |
-| 브리지 노드만 종료: 다른 터미널에서 `pkill -INT -f parameter_bridge` | Gazebo는 계속 돌고 `gz topic -l`에도 `/scan`이 남지만, `ros2 node list`에서 `/ros_gz_bridge`가 사라지고 `/scan`, `/odom`이 더 이상 들어오지 않습니다. 시뮬을 다시 launch 하면 복구됩니다. | `ros2 node list`, `ros2 topic hz /scan`, `gz topic -l` |
+| 브리지 노드만 종료: 다른 터미널에서 `pkill -INT -f parameter_bridge` | Gazebo는 계속 돌고 `gz topic -l`에도 `/scan`이 남지만, `ros2 node list`에서 `/ros_gz_bridge`가 사라지고 `/scan`, `/odom`이 더 이상 들어오지 않습니다. 시뮬을 다시 launch 하면 복구됩니다. (미검증) | `ros2 node list`, `ros2 topic hz /scan`, `gz topic -l` |
 | `ros2 topic echo /robot_description --qos-durability volatile --once` | 아무것도 나오지 않고 멈춥니다(Ctrl-C로 종료). 기본 설정의 echo는 바로 나옵니다. | `ros2 topic info -v /robot_description`의 Durability |
 | `ros2 topic echo /scan --qos-reliability best_effort --once`와 기본 echo 비교 | 둘 다 받습니다. publisher가 RELIABLE이면 best_effort subscriber와 호환되기 때문입니다. 반대 조합은 7장에서 봅니다. | `ros2 topic info -v /scan` |
-| rviz2를 `use_sim_time` 없이 실행 (8장 실습 참고) | TF 관련 경고가 반복되고 레이저 점이 안 보이거나 깜박입니다. | rviz2 왼쪽 아래 Global Status의 메시지 |
+| rviz2를 `use_sim_time` 없이 실행 (8장 실습 참고) | TF 관련 경고가 반복되고 레이저 점이 안 보이거나 깜박입니다. (미검증) | rviz2 왼쪽 아래 Global Status의 메시지 |
 
 ## 5. 확인 질문
 <details><summary>Q1. Gazebo는 왜 ros2 node list에 없나요?</summary>
@@ -398,3 +414,4 @@ Gazebo 안의 LiDAR 센서는 그대로 동작하고 `gz topic -l`에도 계속 
   - `view_frames` PDF, rqt_graph 화면, rviz2 경고: 확인 못 함(GUI).
   - 브리지 노드만 끄는 실험의 정확한 증상: 확인 못 함(시뮬 필요).
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 결함 수정(2026-10-31): 실습 6-6에서 `tf2_echo odom base_scan`의 x가 생성 위치 -2.0을 포함한다고 쓴 설명을 고쳤습니다. 로봇이 움직이지 않았다면 Translation은 `[-0.064, 0.000, 0.132]` 근처이고, 생성 위치 (-2.0, -0.5)는 Gazebo 월드 좌표에서 `odom` 원점이 놓이는 곳이라고 나눠 적었습니다. 근거는 `turtlebot3_gazebo/models/turtlebot3_waffle_pi/model.sdf`의 DiffDrive 설정(`frame_id` odom, `child_frame_id` base_footprint, `tf_topic` /tf), 위치를 0에서 적분하는 DiffDrive 오도메트리 동작(`gz/math/DiffDriveOdometry.hh`에는 초기 위치를 정하는 함수가 없음), `turtlebot3_world.launch.py`의 `x_pose` -2.0, `y_pose` -0.5 기본값, `spawn_turtlebot3.launch.py`의 `create` 인자(yaw 없음), URDF의 `base_joint` 0.010과 `scan_joint` 0.122입니다. 시뮬은 실행하지 않았습니다. 실제 시뮬이 필요한 실습 6-1, 6-4, 6-5, 6-6, 6-7과 4절의 브리지 종료, rviz2 경고 행에 미검증 표시를 달았습니다.

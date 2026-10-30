@@ -462,28 +462,18 @@ map_server는 지도를 activate 순간에 한 번만 발행했는데도, 늦게
 
 ### 실습 9-4. 시뮬을 텔레옵으로 몰면서 지도 만들기 (bag 기록 포함)
 
+> **미검증 실습**: 문서를 쓸 때 Gazebo에서 bag을 기록하고 slam_toolbox로 지도를 만드는 과정을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
+
 **준비**: 터미널 5개. map_server 실습은 모두 Ctrl-C로 끕니다.
 
-**직접 입력**:
+**직접 입력**: 두 단계로 나눕니다. 1단계에서는 slam_toolbox 없이 로봇을 몰면서 bag을 기록하고, 2단계에서는 slam_toolbox를 켜고 다시 몰면서 지도를 만듭니다. bag을 SLAM과 따로 기록하는 이유는 slam_toolbox가 켜져 있으면 그 노드가 내는 `map → odom` 변환도 `/tf`에 섞여 기록되기 때문입니다. 그런 bag을 9-5에서 재생하면 bag player와 새 slam_toolbox가 둘 다 `map → odom`을 내서 두 값이 서로 덮어씁니다. `ros2 bag record`와 `ros2 bag play`는 토픽 단위로만 고를 수 있으므로(`--topics`, `--exclude-topics`), `/tf` 안의 변환 하나만 빼는 방법은 없습니다.
+
+**1단계: SLAM 없이 bag 기록**
 
 터미널 1: 시뮬레이터
 
 ```bash
 ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
-```
-
-터미널 2: slam_toolbox (실시간, 비동기 방식)
-
-```bash
-ros2 launch slam_toolbox online_async_launch.py use_sim_time:=true
-```
-
-이 launch 파일의 `use_sim_time` 기본값은 이미 `true`이지만, 무엇에 기대고 있는지 드러나도록 직접 적습니다. 파라미터 파일은 기본값인 `/opt/ros/jazzy/share/slam_toolbox/config/mapper_params_online_async.yaml`이 쓰입니다. 그 안의 `odom_frame: odom`, `map_frame: map`, `base_frame: base_footprint`, `scan_topic: /scan`이 TurtleBot3 시뮬의 이름과 그대로 맞기 때문에 따로 고칠 것이 없습니다.
-
-터미널 3: rviz2 (slam_toolbox가 제공하는 설정 파일 사용)
-
-```bash
-rviz2 -d /opt/ros/jazzy/share/slam_toolbox/config/slam_toolbox_default.rviz --ros-args -p use_sim_time:=true
 ```
 
 터미널 4: bag 기록 (원서처럼 나중에 지도를 다시 만들 재료)
@@ -499,9 +489,36 @@ ros2 bag record -o tb3_drive --use-sim-time /scan /tf /tf_static /odom
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true -p use_sim_time:=true
 ```
 
-터미널 5에 포커스를 두고 천천히 몰면서 기둥 사이와 벽을 따라 한 바퀴 이상 돕니다. 같은 곳을 두 번 지나가면 slam_toolbox가 루프 폐쇄(loop closure)로 지도를 바로잡을 기회가 생깁니다. 회전은 특히 천천히 합니다 (`c` 키로 회전 속도를 줄일 수 있습니다).
+터미널 5에 포커스를 두고 천천히 몰면서 기둥 사이와 벽을 따라 한 바퀴 이상 돕니다. 같은 곳을 두 번 지나가면 9-5에서 slam_toolbox가 루프 폐쇄(loop closure)로 지도를 바로잡을 기회가 생깁니다. 회전은 특히 천천히 합니다 (`c` 키로 회전 속도를 줄일 수 있습니다). 다 돌았으면 터미널 4의 bag 기록만 Ctrl-C로 멈추고, 시뮬과 텔레옵은 켜 둡니다.
 
-지도가 충분히 채워지면 **터미널 4의 bag 기록만** Ctrl-C로 멈추고, 나머지는 켜 둔 채로 구조를 관찰합니다.
+**bag 확인**:
+
+```bash
+ros2 bag info ~/rosbook_ws/bags/tb3_drive
+ls ~/rosbook_ws/bags/tb3_drive
+```
+
+`Storage id: mcap`, 토픽별 메시지 수, `Duration`이 보입니다. `/tf_static`은 메시지가 1~2개뿐입니다. 고정 변환은 시작할 때 한 번만 발행되고, recorder가 늦게 붙어도 `transient_local` 덕분에 받아서 기록합니다. 이 bag의 `/tf`에는 `odom → base_footprint`와 바퀴 변환만 있고 `map → odom`은 없습니다.
+
+**2단계: slam_toolbox로 지도 만들기**
+
+터미널 2: slam_toolbox (실시간, 비동기 방식)
+
+```bash
+ros2 launch slam_toolbox online_async_launch.py use_sim_time:=true
+```
+
+이 launch 파일의 `use_sim_time` 기본값은 이미 `true`이지만, 무엇에 기대고 있는지 드러나도록 직접 적습니다. 파라미터 파일은 기본값인 `/opt/ros/jazzy/share/slam_toolbox/config/mapper_params_online_async.yaml`이 쓰입니다. 그 안의 `odom_frame: odom`, `map_frame: map`, `base_frame: base_footprint`, `scan_topic: /scan`이 TurtleBot3 시뮬의 이름과 그대로 맞기 때문에 따로 고칠 것이 없습니다.
+
+터미널 3: rviz2 (slam_toolbox가 제공하는 설정 파일 사용)
+
+```bash
+rviz2 -d /opt/ros/jazzy/share/slam_toolbox/config/slam_toolbox_default.rviz --ros-args -p use_sim_time:=true
+```
+
+터미널 5의 텔레옵으로 1단계와 같은 길을 다시 천천히 돕니다. 같은 곳을 두 번 지나가면 slam_toolbox가 루프 폐쇄로 지도를 바로잡을 기회가 생깁니다.
+
+지도가 충분히 채워지면 모두 켜 둔 채로 터미널 4에서 구조를 관찰합니다.
 
 ```bash
 ros2 lifecycle get /slam_toolbox
@@ -524,29 +541,27 @@ ros2 run tf2_ros tf2_echo map base_footprint --ros-args -p use_sim_time:=true
   - `base_footprint → base_link` 이하: robot_state_publisher (URDF의 고정 관절은 `/tf_static`, 바퀴 관절은 `/joint_states`를 받아 `/tf`)
 - `tf2_echo map base_footprint`는 slam_toolbox의 보정과 오도메트리를 합친 로봇 위치를 보여 줍니다.
 
-**지도 저장**: 지도가 마음에 들면 터미널 4(bag을 멈춘 터미널)에서 저장합니다.
+**지도 저장**: 지도가 마음에 들면 터미널 4에서 저장합니다.
 
 ```bash
 ros2 run nav2_map_server map_saver_cli -f ~/rosbook_ws/maps/tb3_world
 cat ~/rosbook_ws/maps/tb3_world.yaml
 ```
 
-`tb3_world.pgm`과 `tb3_world.yaml` 두 파일이 생깁니다. YAML의 `origin`은 처음 보는 값일 것입니다. slam_toolbox 지도의 `map` 원점은 SLAM을 시작한 순간의 로봇 위치(= `odom` 원점)이고, `origin`은 그 기준에서 이미지 왼쪽 아래 모서리가 어디인지를 적은 것입니다. 이 사실은 10장에서 목표 좌표를 정할 때 다시 씁니다.
+`tb3_world.pgm`과 `tb3_world.yaml` 두 파일이 생깁니다. YAML의 `origin`은 처음 보는 값일 것입니다. 여기서 원점 두 가지를 구분해야 합니다.
 
-**bag 확인**:
+- `map` 프레임의 원점: `odom` 원점과 같은 곳입니다. slam_toolbox는 첫 스캔의 보정 위치를 그 스캔의 오도메트리 위치 그대로 두므로, 처음 내는 `map → odom` 변환은 이동도 회전도 없는 항등 변환입니다. 기본 파라미터 파일에서 시작 위치를 바꾸는 `map_start_pose`와 `map_start_at_dock`은 주석 처리되어 있습니다. `odom` 원점은 6장에서 본 대로 Gazebo가 로봇을 생성한 위치(월드 좌표 (-2.0, -0.5))입니다. 이 실습에서는 1단계에서 로봇을 몰았으므로 SLAM을 켠 순간의 로봇 위치는 이곳이 아닙니다. 그래도 `map` 원점은 로봇의 현재 위치가 아니라 `odom` 원점에 맞춰집니다.
+- YAML의 `origin`: `map` 프레임 원점이 아니라, `map` 좌표에서 지도 이미지 왼쪽 아래 칸의 모서리가 어디인지를 적은 값입니다. 9-1에서 손으로 적은 `origin`과 같은 뜻입니다.
 
-```bash
-ros2 bag info ~/rosbook_ws/bags/tb3_drive
-ls ~/rosbook_ws/bags/tb3_drive
-```
-
-`Storage id: mcap`, 토픽별 메시지 수, `Duration`이 보입니다. `/tf_static`은 메시지가 1~2개뿐입니다. 고정 변환은 시작할 때 한 번만 발행되고, recorder가 늦게 붙어도 `transient_local` 덕분에 받아서 기록합니다.
+이 구분은 10장에서 목표 좌표를 정할 때 다시 씁니다.
 
 다 확인했으면 터미널 1, 2, 3, 5를 모두 Ctrl-C로 끕니다.
 
 **생각해 볼 질문**: bag을 기록할 때 `--use-sim-time`을 붙인 이유는 무엇일까요? (bag에는 메시지마다 "받은 시각"이 저장되고, `--clock`은 그 시각을 `/clock`으로 다시 냅니다.)
 
 ### 실습 9-5. bag 재생으로 지도 다시 만들기
+
+> **미검증 실습**: 문서를 쓸 때 bag 재생으로 지도를 다시 만드는 과정을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 4개. **Gazebo는 반드시 꺼 둡니다.** Gazebo가 켜져 있으면 Gazebo의 `/clock`과 bag의 `/clock`이 둘 다 나와서 시간이 앞뒤로 튀고, 실시간 `/scan`과 재생된 `/scan`이 섞입니다 (원서 PDF p.159의 경고와 같은 문제입니다).
 
@@ -576,6 +591,7 @@ ros2 bag play ~/rosbook_ws/bags/tb3_drive --clock
 ros2 topic info -v /clock
 ros2 topic echo /clock --once
 ros2 node list
+ros2 topic info -v /tf
 ```
 
 재생이 끝나면(터미널 3이 스스로 종료) 저장합니다.
@@ -588,6 +604,7 @@ ros2 run nav2_map_server map_saver_cli -f ~/rosbook_ws/maps/tb3_world_bag
 
 - `/clock`의 publisher는 `rosbag2_player` 하나뿐입니다. Gazebo가 꺼져 있으므로 ros_gz_bridge가 없습니다.
 - `ros2 node list`에 Gazebo, bridge, robot_state_publisher가 없는데도 slam_toolbox가 지도를 만듭니다. slam_toolbox는 "누가" 보냈는지 모르고 `/scan`, `/tf`, `/tf_static`이라는 이름과 타입만 보고 데이터를 받기 때문입니다. bag player가 원래 노드들 자리를 대신합니다.
+- `ros2 topic info -v /tf`의 publisher는 `rosbag2_player`와 slam_toolbox 둘입니다. bag player는 기록된 `odom → base_footprint`와 바퀴 변환을 내고, `map → odom`은 새 slam_toolbox 하나만 냅니다. 9-4에서 bag을 SLAM 없이 기록했기 때문입니다.
 - 재생 속도를 바꾸려면 `-r 0.5`처럼 `--rate`를 줍니다. 처리 속도가 따라오지 못할 때 느리게 재생하면 지도가 나아질 수 있습니다.
 - 9-4의 `tb3_world.pgm`과 `tb3_world_bag.pgm`을 이미지 뷰어(`eog`가 있으면 `eog ~/rosbook_ws/maps/tb3_world_bag.pgm`, 없으면 Windows 탐색기에서 `\\wsl.localhost\Ubuntu\home\<사용자>\rosbook_ws\maps`)로 열어 비교합니다.
 
@@ -596,6 +613,8 @@ slam_toolbox의 파라미터(예: `minimum_travel_distance`, `minimum_travel_hea
 **생각해 볼 질문**: 이 실습에서 slam_toolbox를 `use_sim_time:=false`로 띄우면 노드의 "현재 시각"과 bag 안 메시지의 header 시각은 각각 무엇을 기준으로 할까요?
 
 ### 실습 9-6. 저장한 지도를 map_server로 다시 띄우기
+
+> **미검증 실습**: 문서를 쓸 때 9-4에서 만든 지도를 map_info와 rviz2로 보는 부분을 실제로 실행해 확인하지 못했습니다. 결과가 문서와 다르면 문서가 틀렸을 수 있으니, 7절의 검증 기록과 비교해 보세요.
 
 **준비**: 터미널 3개. SLAM과 Gazebo는 꺼 둡니다.
 
@@ -639,13 +658,14 @@ rviz2에서 Fixed Frame을 `map`으로 바꾸고, Add → By topic → `/map`의
 | 9-3에서 configure만 하고 activate를 하지 않음 | map_info가 "/map 을 기다립니다"에서 멈춤. publisher는 있음 | `ros2 lifecycle get /map_server` → `inactive [2]`, `ros2 topic info -v /map` |
 | `map_info.py`의 `DurabilityPolicy.TRANSIENT_LOCAL`을 `VOLATILE`로 바꾸고 다시 빌드한 뒤, activate **이후에** 실행 | 지도를 영영 받지 못함 (activate 전에 미리 켜 두었다면 받음) | `ros2 topic info -v /map`에서 subscriber의 Durability가 `VOLATILE`인지 확인. 같은 실험을 명령으로: `ros2 topic echo /map --once --no-arr --qos-durability volatile --qos-reliability reliable` |
 | `tiny.yaml`의 `free_thresh`를 `0.25`로 바꾸고 map_server 재시작 | map_info가 `unknown=0`, `free=32`를 출력. 회색 칸이 빈 공간이 됨 | 1절의 식에 205를 넣어 보기 (p ≈ 0.196 < 0.25) |
-| `tiny.yaml`의 `negate`를 `1`로 바꿈 | 벽과 빈 공간이 뒤바뀜 (`occupied`와 `free` 개수가 바뀜) | map_info 출력, rviz2 Map 디스플레이 |
-| `yaml_filename` 경로를 틀리게 줌 (예: `tiny.yml`) | `configure`가 실패하고 상태가 `unconfigured`로 남음. 터미널 1에 파일 열기 실패 로그 | `ros2 lifecycle get /map_server`, 터미널 1 로그 |
+| `tiny.yaml`의 `negate`를 `1`로 바꿈 | 벽과 빈 공간이 뒤바뀜 (`occupied`와 `free` 개수가 바뀜) (미검증) | map_info 출력, rviz2 Map 디스플레이 |
+| `yaml_filename` 경로를 틀리게 줌 (예: `tiny.yml`) | `configure`가 실패하고 상태가 `unconfigured`로 남음. 터미널 1에 파일 열기 실패 로그 (미검증) | `ros2 lifecycle get /map_server`, 터미널 1 로그 |
 | 9-4에서 텔레옵을 `stamped:=true` 없이 실행 | 키를 눌러도 로봇이 움직이지 않음 | `ros2 topic info -v /cmd_vel` → 타입이 둘(`Twist`, `TwistStamped`)로 나뉨 |
-| 9-4에서 bag을 `/tf_static` 없이 기록하고 9-5를 진행 | slam_toolbox가 `base_scan` 프레임으로 가는 변환을 찾지 못해 스캔을 버리고 지도가 생기지 않음 | `ros2 bag info`, `ros2 run tf2_tools view_frames` (트리가 `base_footprint`에서 끊김) |
-| 9-5에서 Gazebo를 끄지 않고 `--clock` 재생 | 시간이 앞뒤로 튀고 tf 경고가 쏟아지며 지도가 엉망이 됨 | `ros2 topic info -v /clock` → publisher가 2개 |
+| 9-4에서 bag을 `/tf_static` 없이 기록하고 9-5를 진행 | slam_toolbox가 `base_scan` 프레임으로 가는 변환을 찾지 못해 스캔을 버리고 지도가 생기지 않음 (미검증) | `ros2 bag info`, `ros2 run tf2_tools view_frames` (트리가 `base_footprint`에서 끊김) |
+| 9-4에서 slam_toolbox를 켠 채로 bag을 기록하고 9-5를 진행 | bag player와 새 slam_toolbox가 둘 다 `map → odom`을 내서, rviz2에서 로봇과 스캔이 두 위치 사이를 오가고 새 지도가 어긋날 수 있음 (미검증) | slam_toolbox를 켜기 전에 bag만 재생하고 `ros2 run tf2_ros tf2_echo map odom --ros-args -p use_sim_time:=true` (SLAM 노드가 없는데도 값이 나오면 bag에 `map → odom`이 들어 있음) |
+| 9-5에서 Gazebo를 끄지 않고 `--clock` 재생 | 시간이 앞뒤로 튀고 tf 경고가 쏟아지며 지도가 엉망이 됨 (미검증) | `ros2 topic info -v /clock` → publisher가 2개 |
 | 9-5에서 `ros2 bag play --clock ~/rosbook_ws/bags/tb3_drive` 순서로 입력 | `argument --clock: invalid positive_float value` 오류로 바로 종료 | `ros2 bag play -h`에서 `--clock [Hz]` 확인 |
-| 9-4에서 slam_toolbox 실행 중 터미널 2를 Ctrl-C | rviz2의 지도가 더 이상 갱신되지 않고, `map` 프레임이 tf 트리에서 사라짐 (rviz2 Fixed Frame `map` 오류) | `ros2 run tf2_ros tf2_echo map odom --ros-args -p use_sim_time:=true` |
+| 9-4에서 slam_toolbox 실행 중 터미널 2를 Ctrl-C | rviz2의 지도가 더 이상 갱신되지 않고, `map` 프레임이 tf 트리에서 사라짐 (rviz2 Fixed Frame `map` 오류) (미검증) | `ros2 run tf2_ros tf2_echo map odom --ros-args -p use_sim_time:=true` |
 
 ## 5. 확인 질문
 
@@ -714,3 +734,4 @@ bag은 메시지마다 recorder가 받은 시각을 저장하고, `ros2 bag play
   - 9-4의 `ros2 bag record --use-sim-time` 동작과, 이 옵션 없이 기록한 시뮬 bag이 slam_toolbox에 주는 실제 증상.
   - 4절 표 중 `/tf_static` 누락, Gazebo와 bag `/clock` 동시 발행, `negate: 1`, 잘못된 `yaml_filename`, slam_toolbox 종료 실험의 실제 출력.
 - 설명 보강(2026-10-30): "이 장에서 체감할 구조"와 1절에 그림, 코드 예시, 코드와 폴더 구조, 실무 메모를 더했습니다. 머리말과 2~6절은 바꾸지 않았습니다. 1절의 코드 예시는 따로 실행하지 않았습니다.
+- 결함 수정(2026-10-31): 실습 9-4가 slam_toolbox를 켠 채로 bag을 기록해 `/tf`에 `map → odom`이 들어가고, 9-5에서 bag player와 새 slam_toolbox가 둘 다 `map → odom`을 내게 되는 설계를 고쳤습니다. 9-4를 "SLAM 없이 bag 기록"과 "slam_toolbox로 지도 만들기" 두 단계로 나누고, 9-5의 관찰에 `/tf` publisher 확인을, 4절에 SLAM을 켠 채 기록한 bag을 쓰는 행을 더했습니다. `ros2 bag play`가 토픽 단위로만 거를 수 있다는 근거는 `ros2bag/verb/play.py`의 `--topics`, `--exclude-topics`, `--exclude-regex` 옵션입니다. 9-5의 재생 순서, `--clock`, `use_sim_time:=true`는 바뀌지 않습니다. 또 지도 저장 뒤의 설명에서 `map` 원점을 "SLAM을 시작한 순간의 로봇 위치"라고 쓴 부분을 "`odom` 원점과 같은 곳"으로 고치고, YAML의 `origin`(지도 이미지 왼쪽 아래 모서리)과 구분했습니다. 근거는 `slam_toolbox/config/mapper_params_online_async.yaml`과 `mapper_params_online_sync.yaml`에서 `map_start_pose`, `map_start_at_dock`이 주석 처리된 점, 그리고 첫 스캔의 보정 위치를 오도메트리 위치로 두는 slam_toolbox(Karto)의 동작입니다. 이 동작은 설치된 파일에 소스가 없어 직접 확인하지 못했습니다. 6장의 `odom` 원점 설명(생성 위치 (-2.0, -0.5))과 맞췄습니다. 시뮬은 실행하지 않았으므로 바뀐 9-4, 9-5 흐름도 실행해 보지 못했습니다. 실습 9-4, 9-5, 9-6(지도 보기 부분)과 4절에서 실행하지 않은 여섯 행에 미검증 표시를 달았습니다.
